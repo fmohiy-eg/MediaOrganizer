@@ -22,7 +22,11 @@ DEFAULTS = {
         "duration_deviation_seconds": 120,
         "variant_priority": ["resolution", "bitrate", "codec", "audio_channels"],
     },
-    "ffprobe": {"timeout_seconds": 30, "retries": 3, "binary": "ffprobe"},
+    # binary "" => auto-detect (resolve_ffprobe falls back to PATH then "ffprobe").
+    "ffprobe": {"timeout_seconds": 30, "retries": 3, "binary": ""},
+    # Media player for the dashboard's "play" action. binary "" => auto-detect VLC,
+    # else open with the OS default association.
+    "player": {"binary": ""},
     "api": {"max_retries": 2, "retry_backoff_seconds": 5, "cache_ttl_days": 30},
     "scan": {
         "worker_threads": 4,

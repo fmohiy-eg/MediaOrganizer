@@ -92,10 +92,6 @@ class OrganizeApplyBody(BaseModel):
     confirm: bool = False
 
 
-_VLC_PATHS = [r"C:\Program Files\VideoLAN\VLC\vlc.exe",
-              r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"]
-
-
 def _walk_files(folder):
     """All file paths under `folder`, recursively (forward-slash normalized)."""
     out = []
@@ -110,18 +106,19 @@ def _scandir(folder):
     return [os.path.join(folder, n).replace("\\", "/") for n in os.listdir(folder)]
 
 
-def launch_player(local_path):
-    """Open a file in VLC if installed, else the OS default association. Runs on the
-    machine hosting the dashboard (the user's laptop)."""
-    for vlc in _VLC_PATHS:
-        if os.path.isfile(vlc):
-            subprocess.Popen([vlc, local_path])
-            return
-    on_path = shutil.which("vlc")
-    if on_path:
-        subprocess.Popen([on_path, local_path])
+def launch_player(local_path, player_bin=None):
+    """Open a file in the configured/resolved player, else the OS default association.
+    Runs on the machine hosting the dashboard. `player_bin` is the resolved VLC (or
+    other) binary, or None to use the platform default. Cross-platform."""
+    if player_bin:
+        subprocess.Popen([player_bin, local_path])
         return
-    os.startfile(local_path)  # Windows default player for this file type
+    if sys.platform == "win32":
+        os.startfile(local_path)  # Windows default player for this file type
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", local_path])
+    else:
+        subprocess.Popen(["xdg-open", local_path])
 
 
 def _search_params(filepath, row):
@@ -141,7 +138,7 @@ def _search_params(filepath, row):
 def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
                os_client=None, http_get=requests.get,
                ffprobe_binary="ffprobe", probe_fn=probe_streams,
-               duration_deviation_seconds=120, player_fn=launch_player,
+               duration_deviation_seconds=120, player_fn=None, player_binary=None,
                tmdb_api_key="", tvdb_api_key="", tmdb_client=None, tvdb_client=None,
                media_paths=None, move_fn=shutil.move, makedirs_fn=os.makedirs,
                exists_fn=os.path.exists, build_id=None,
@@ -152,6 +149,8 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
     build_id = build_id or "dev"
     path_map = path_map or {}
     media_paths = media_paths or []
+    if player_fn is None:
+        player_fn = lambda p: launch_player(p, player_binary)
     client = os_client or OpenSubtitlesClient(os_api_key)
     tmdb = tmdb_client or TmdbClient(tmdb_api_key)
     tvdb = tvdb_client or TvdbClient(tvdb_api_key)

@@ -14,6 +14,7 @@ import uvicorn
 
 from src.config import load_config
 from src.database import init_db
+from src.toolpaths import resolve_ffprobe, resolve_player
 from web_dashboard import create_app
 
 
@@ -36,11 +37,12 @@ def main(config_path="config.yaml", host="0.0.0.0", port=8080):
         config["database_path"], config["quarantine_path"],
         os_api_key=config["api_keys"]["opensubtitles"]["api_key"],
         path_map=config.get("path_map", {}),
-        ffprobe_binary=config["ffprobe"].get("binary", "ffprobe"),
+        ffprobe_binary=resolve_ffprobe(config["ffprobe"].get("binary", "")),
         duration_deviation_seconds=config["audit"]["duration_deviation_seconds"],
         tmdb_api_key=config["api_keys"]["tmdb"],
         tvdb_api_key=config["api_keys"]["tvdb"],
         media_paths=config["media_paths"],
+        player_binary=resolve_player(config.get("player", {}).get("binary", "")),
         build_id=_build_id())
     print(f"Dashboard: http://{host}:{port}  (db={config['database_path']})")
     uvicorn.run(app, host=host, port=port)
