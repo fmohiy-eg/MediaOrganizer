@@ -25,3 +25,18 @@ def test_empty_media_paths_raises(tmp_path):
     cfg_path = _write(tmp_path, "media_paths: []\n")
     with pytest.raises(ConfigError):
         load_config(cfg_path)
+
+
+def test_env_var_overlays_blank_yaml_api_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMDB_API_KEY", "from_env")
+    cfg_path = _write(tmp_path, "media_paths:\n  - /media/Movies\n")  # blank tmdb key
+    cfg = load_config(cfg_path)
+    assert cfg["api_keys"]["tmdb"] == "from_env"
+
+
+def test_dotenv_next_to_config_overlays_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("TVDB_API_KEY", raising=False)
+    (tmp_path / ".env").write_text("TVDB_API_KEY=from_dotenv\n")
+    cfg_path = _write(tmp_path, "media_paths:\n  - /media/Movies\n")
+    cfg = load_config(cfg_path)
+    assert cfg["api_keys"]["tvdb"] == "from_dotenv"

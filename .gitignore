@@ -5,6 +5,7 @@ __pycache__/
 *.db-wal
 *.db-shm
 config.yaml
+.env
 _local/
 nas_check.sh
 tools/

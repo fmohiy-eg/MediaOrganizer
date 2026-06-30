@@ -2,6 +2,8 @@ import copy
 import os
 import yaml
 
+from src.secrets import apply_secrets
+
 DEFAULTS = {
     "media_paths": [],
     "database_path": "/config/media_audit.db",
@@ -63,6 +65,10 @@ def load_config(path):
     if not isinstance(user, dict):
         raise ConfigError("Config root must be a mapping")
     merged = _deep_merge(DEFAULTS, user)
+    # Overlay API credentials from the environment / a .env file (env > .env > yaml).
+    # Resolve .env next to the config file so it travels with a deployment.
+    dotenv_path = os.path.join(os.path.dirname(os.path.abspath(path)), ".env")
+    apply_secrets(merged, dotenv_path=dotenv_path)
     if not merged["media_paths"]:
         raise ConfigError("config.media_paths must contain at least one path")
     return merged
