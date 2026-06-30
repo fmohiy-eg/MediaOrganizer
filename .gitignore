@@ -9,3 +9,6 @@ config.yaml
 _local/
 nas_check.sh
 tools/
+# Personal library path dumps (parser validation fixtures) — never publish
+tv.txt
+movies.txt
