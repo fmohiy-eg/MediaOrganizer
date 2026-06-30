@@ -47,7 +47,7 @@ Verify with `ffprobe -version`. It's auto-detected; if it lives somewhere off PA
 
 ```bash
 pip install -r requirements.txt
-python setup.py                      # interactive wizard -> writes config.yaml
+python setup_wizard.py               # interactive wizard -> writes config.yaml
 cp .env.example .env                 # (optional) put your API keys here
 ```
 

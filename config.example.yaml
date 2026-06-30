@@ -1,5 +1,5 @@
 # Media Organizer configuration.
-# Copy to config.yaml (gitignored) and edit — or just run: python setup.py
+# Copy to config.yaml (gitignored) and edit — or just run: python setup_wizard.py
 # API keys can live here, but a .env file (see .env.example) is recommended and
 # overrides these. Precedence per key: environment > .env > this file.
 

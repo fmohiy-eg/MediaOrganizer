@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A headless media-library auditor. Scans Movies/TV shares, fingerprints files, reads stream specs, identifies titles, flags duplicates / quality variants / missing episodes / subtitle gaps, fetches subtitles, and safely quarantines files chosen for removal. Design spec: `Plan3.md`; sequenced implementation plans: `plans/`.
 
-This is the **shareable/distributable** build (forked from a single-user QNAP setup). It runs in two shapes: **single-machine** (media on a local/external/mounted drive, everything in one place, `path_map: {}` — the documented default) or the original **NAS+PC split** (scan on the NAS, dashboard on a PC, `path_map` translating NAS↔SMB). Cross-platform. First-run setup is `python setup.py` (the `src/wizard.py` wizard). Almost everything that was hardcoded to one environment is now config-driven; see `config.example.yaml`.
+This is the **shareable/distributable** build (forked from a single-user QNAP setup). It runs in two shapes: **single-machine** (media on a local/external/mounted drive, everything in one place, `path_map: {}` — the documented default) or the original **NAS+PC split** (scan on the NAS, dashboard on a PC, `path_map` translating NAS↔SMB). Cross-platform. First-run setup is `python setup_wizard.py` (the `src/wizard.py` wizard). Almost everything that was hardcoded to one environment is now config-driven; see `config.example.yaml`.
 
 ## Commands
 
 ```bash
 pip install -r requirements.txt
-python setup.py                                       # first-run wizard -> writes config.yaml
+python setup_wizard.py                                # first-run wizard -> writes config.yaml
 python -m pytest -q                                   # full suite (~272 tests)
 python -m pytest tests/test_parsing.py -q             # one file
 python -m pytest tests/web/test_inspect.py::test_format_duration -v   # one test
@@ -28,7 +28,7 @@ Operational runners (drive the real library; each takes `config.yaml`). NAS-side
 - `match_live.py` (PC) — fallback TMDB/TVDB matching, deduped to one lookup per distinct title.
 - `probe_dupes.py` (PC) — ffprobe over SMB for the `services.probe_targets` set (every duplicate-group file + every movie, **minus DVD `VIDEO_TS` `.vob` fragments**, which can't be probed standalone), storing `duration_ms`/resolution/codec/`audio_languages` (feeds the Duplicates runtime split + Arabic-audio). Resumable; ~0.6 files/s over SMB. The Admin **Probe** panel reuses `probe_targets` to show done/target/remaining + the unprobeable-file list.
 
-`config.yaml` is gitignored (run `python setup.py`, or copy `config.example.yaml`). **API keys** layer in via `src/secrets.apply_secrets` (called at the end of `load_config`): precedence **process env > `.env` file (next to config.yaml) > config.yaml**; an empty env/.env value never clobbers a real yaml value. Ship `.env.example`. For a **NAS+PC split** there are two config files (NAS-local paths; PC SMB paths + `path_map`); **single-machine** uses one config with `path_map: {}`. Tests run fully offline. End-user guide: `RUNBOOK.md`.
+`config.yaml` is gitignored (run `python setup_wizard.py`, or copy `config.example.yaml`). **API keys** layer in via `src/secrets.apply_secrets` (called at the end of `load_config`): precedence **process env > `.env` file (next to config.yaml) > config.yaml**; an empty env/.env value never clobbers a real yaml value. Ship `.env.example`. For a **NAS+PC split** there are two config files (NAS-local paths; PC SMB paths + `path_map`); **single-machine** uses one config with `path_map: {}`. Tests run fully offline. End-user guide: `RUNBOOK.md`.
 
 ## Deployment reality (this is non-obvious and shapes everything)
 
@@ -43,7 +43,7 @@ Two entry points sit on a **shared SQLite database** (`media_audit.db`) and a la
 
 - **`cli_engine.py`** — interactive menu; `run_task(choice, config)` runs one task non-interactively (tests drive this).
 - **`web_dashboard.py`** — `create_app(db_path, quarantine_path, os_api_key, path_map, ffprobe_binary, ..., player_binary, audio_flag) -> FastAPI` factory (self-contained tabbed Tailwind UI + JSON endpoints). `run_dashboard.py` serves it via uvicorn, resolves ffprobe/player via `toolpaths`, and injects config (incl. `audio_flag`).
-- **`setup.py` / `src/wizard.py`** — first-run CLI wizard. `build_config_dict(answers)` is a pure (tested) answers→config function; `run_wizard(...)` does only prompting/validation/writing and is fully injectable (`input_fn`/`exists_fn`/`isfile_fn`/`which_fn`/`write_fn`/`platform_name`/`env`).
+- **`setup_wizard.py` / `src/wizard.py`** — first-run CLI wizard. `build_config_dict(answers)` is a pure (tested) answers→config function; `run_wizard(...)` does only prompting/validation/writing and is fully injectable (`input_fn`/`exists_fn`/`isfile_fn`/`which_fn`/`write_fn`/`platform_name`/`env`).
 - **`src/secrets.py`** — `apply_secrets(config, env, dotenv_path, read_file_fn)` overlays API keys from env/`.env`. **`src/toolpaths.py`** — `resolve_ffprobe`/`resolve_player` cross-platform binary resolution.
 
 Module pipeline, in data-flow order:

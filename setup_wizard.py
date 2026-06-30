@@ -1,7 +1,7 @@
 """First-run setup: interactively create config.yaml.
 
 Usage:
-    python setup.py [config.yaml]
+    python setup_wizard.py [config.yaml]
 
 Asks a few questions (deployment mode, library folders, tools, optional API keys
 and audio-language flagging) and writes a ready-to-use config. Put your API keys in
