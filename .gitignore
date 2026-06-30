@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.db-wal
+*.db-shm
+config.yaml
+_local/
+nas_check.sh
+tools/

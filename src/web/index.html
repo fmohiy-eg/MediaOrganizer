@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NAS Media Organizer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div class="max-w-5xl mx-auto p-6">
+  <h1 class="text-2xl font-semibold mb-1">NAS Media Organizer &amp; Audit Engine</h1>
+  <p class="text-sm text-slate-500 mb-4">Dry-run by default — deletions move files to quarantine, never erase.
+    <span id="build" class="text-slate-400 ml-2" title="Server build / start time — if this looks old after an update, restart the dashboard">build __BUILD_ID__</span></p>
+
+  <nav class="flex gap-1 border-b mb-6 text-sm">
+    <button data-tab="overview"   class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Overview</button>
+    <button data-tab="dupsame" data-panel="duplicates" class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Dupes · Same length</button>
+    <button data-tab="dupdiff" data-panel="duplicates" class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Dupes · Diff length</button>
+    <button data-tab="mismatch"   class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Mismatch Videos</button>
+    <button data-tab="cleanup"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Cleanup</button>
+    <button data-tab="missing"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Missing Episodes</button>
+    <button data-tab="subtitles"  class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Subtitles</button>
+    <button data-tab="arabic"     data-panel="arabic" class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Arabic Audio</button>
+    <button data-tab="review"     class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Needs Review</button>
+    <button data-tab="organize"   class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Organize Folder</button>
+    <button data-tab="admin"      class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Admin</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section data-panel="overview">
+    <div id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"></div>
+    <div id="overview-extra" class="text-sm text-slate-600 space-y-2"></div>
+  </section>
+
+  <!-- DUPLICATES (one group at a time; two tabs filter by runtime) -->
+  <section data-panel="duplicates" class="hidden">
+    <div id="dupstatus" class="text-xs mb-2"></div>
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-3">
+        <div id="dupnav" class="text-sm text-slate-500"></div>
+        <select id="dupkind" onchange="dupSetKind(this.value)" class="border rounded text-sm px-2 py-0.5" title="Filter duplicate groups by type">
+          <option value="all">All types</option>
+          <option value="movie">Movies</option>
+          <option value="tv">TV Shows</option>
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="dupPrev()" class="px-3 py-1 rounded border text-sm">&larr; Prev</button>
+        <button onclick="dupNext()" class="px-3 py-1 rounded border text-sm">Next &rarr;</button>
+      </div>
+    </div>
+    <div id="dupcard"></div>
+  </section>
+
+  <!-- MISMATCH VIDEOS -->
+  <section data-panel="mismatch" class="hidden">
+    <h2 class="text-lg font-medium mb-1">Mismatch Videos</h2>
+    <p class="text-xs text-slate-500 mb-3">Movie folders containing video files whose name doesn't match the folder name (e.g. a <code>… - CD1</code> part, a stray episode, or a sample). Use <b>Fix</b> on each to identify it as the correct movie or TV show and relocate/rename it. (TV episodes are excluded — they never match their season folder.)</p>
+    <div id="mismatch-head" class="flex items-center gap-3 mb-3 text-sm text-slate-600"></div>
+    <div id="mismatch-list" class="space-y-3"></div>
+  </section>
+
+  <!-- CLEANUP -->
+  <section data-panel="cleanup" class="hidden">
+    <h2 class="text-lg font-medium mb-1">Legacy-format cleanup</h2>
+    <p class="text-xs text-slate-500 mb-3">Old-format files (.rm/.rmvb/.vob/.mpg/.wmv…) that already have a modern copy of the same title in the same folder. Shared subtitles/NFO are preserved automatically.</p>
+    <div id="cleanup-head" class="flex items-center gap-3 mb-3"></div>
+    <div id="cleanup-list" class="space-y-1 text-sm"></div>
+  </section>
+
+  <!-- MISSING EPISODES -->
+  <section data-panel="missing" class="hidden">
+    <h2 class="text-lg font-medium mb-1">Missing Episodes</h2>
+    <p class="text-xs text-slate-500 mb-3">Already-aired episodes absent from disk (future episodes are not counted). Needs <code>gaps_live.py</code> to have cached each show's episode list.</p>
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <select id="missFilter" onchange="document.getElementById('missSearch').value='';renderMissing()" class="border rounded px-2 py-1 text-sm max-w-xs"></select>
+      <input id="missSearch" oninput="renderMissing()" placeholder="search shows…" class="border rounded px-2 py-1 text-sm">
+      <span id="miss-summary" class="text-sm text-slate-500"></span>
+    </div>
+    <div id="missing" class="space-y-2 text-sm"></div>
+  </section>
+
+  <!-- SUBTITLES -->
+  <section data-panel="subtitles" class="hidden">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="text-lg font-medium">Missing English Subtitles</h2>
+      <span id="quota" class="text-xs text-slate-500"></span>
+    </div>
+    <div id="sublogin" class="bg-white rounded-lg shadow p-4 mb-3 text-sm flex flex-wrap gap-2 items-center">
+      <span class="text-slate-500">OpenSubtitles login (this session only, never saved):</span>
+      <input id="osuser" placeholder="username" class="border rounded px-2 py-1">
+      <input id="ospass" type="password" placeholder="password" class="border rounded px-2 py-1">
+      <button onclick="subLogin()" class="bg-slate-800 text-white rounded px-3 py-1">Log in</button>
+      <span id="loginmsg" class="text-slate-500"></span>
+    </div>
+    <p class="text-xs text-amber-600 mb-2">Note: this lists files with no external English .srt. Embedded subs inside .mkv aren't visible without ffprobe.</p>
+    <div id="deficits" class="space-y-1 text-sm"></div>
+    <div class="flex gap-2 mt-3">
+      <button onclick="defPrev()" class="px-3 py-1 rounded border text-sm">&larr; Prev</button>
+      <button onclick="defNext()" class="px-3 py-1 rounded border text-sm">Next &rarr;</button>
+      <span id="defnav" class="text-sm text-slate-500 self-center"></span>
+    </div>
+  </section>
+
+  <!-- ARABIC AUDIO -->
+  <section data-panel="arabic" class="hidden">
+    <div id="arabic-head" class="flex items-center gap-3 mb-3 text-sm text-slate-600"></div>
+    <div id="arabic-list" class="space-y-1 text-sm"></div>
+  </section>
+
+  <!-- NEEDS REVIEW -->
+  <section data-panel="review" class="hidden">
+    <h2 class="text-lg font-medium mb-2">Needs Review — no Jellyfin ID</h2>
+    <div id="review" class="space-y-1 text-sm"></div>
+  </section>
+
+  <!-- ORGANIZE FOLDER -->
+  <section data-panel="organize" class="hidden">
+    <h2 class="text-lg font-medium mb-1">Organize a folder into the library</h2>
+    <p class="text-xs text-slate-500 mb-3">Point at a folder this PC can reach (local or SMB). Reads each video's <b>embedded</b> show/season/episode tags (incl. a composite <code>title</code> tag), identifies the series on TVDB, and previews a <b>before → after</b> rename into <code>TV Shows/01-Ready</code>. <b>Nothing moves until you confirm.</b> Tick files individually or use <b>Select all</b>, then <b>Move selected</b>. Matching subtitles move &amp; are renamed alongside; with <b>Clean up leftovers</b> on, stray artwork/.nfo/trickplay are quarantined and the emptied folder removed (only when every video was moved out — nothing is ever erased).</p>
+    <div class="flex flex-wrap gap-2 items-center mb-3">
+      <input id="orgFolder" placeholder="e.g. D:/Downloads/NewShow or //nas/Public/_incoming" class="border rounded px-2 py-1 text-sm flex-1 min-w-[22rem]">
+      <button onclick="organizeScan()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Scan</button>
+    </div>
+    <div id="org-head" class="text-sm text-slate-600 mb-2"></div>
+    <div id="org-list" class="space-y-1 text-sm"></div>
+    <div id="org-actions" class="mt-3"></div>
+  </section>
+
+  <!-- ADMIN -->
+  <section data-panel="admin" class="hidden">
+    <h2 class="text-lg font-medium mb-1">Admin</h2>
+    <p class="text-xs text-slate-500 mb-3">Maintenance tasks — all run on this PC. Destructive actions back up the DB first and move files to quarantine; nothing is erased.</p>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between mb-2"><h3 class="font-medium">Catalog status</h3>
+          <button id="admin-refresh" onclick="refreshAdmin(this)" class="text-xs text-blue-600 hover:underline">refresh</button></div>
+        <div id="admin-status" class="text-sm text-slate-600 space-y-1">Loading…</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="font-medium mb-2">OpenSubtitles quota</h3>
+        <div id="admin-quota" class="text-sm text-slate-600">Loading…</div>
+      </div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mt-3">
+      <div class="flex items-center justify-between"><h3 class="font-medium">Sync deletions</h3>
+        <button id="admin-sync-btn" onclick="adminSyncScan()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Scan for deleted files</button></div>
+      <p class="text-xs text-slate-500 mt-1">Checks every catalogued file over the share and removes rows whose file is gone (backs up the DB first). No SSH needed.</p>
+      <div id="admin-sync" class="text-sm mt-2"></div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mt-3">
+      <div class="flex items-center justify-between"><h3 class="font-medium">Quarantine</h3>
+        <button id="quar-scan-btn" onclick="quarScan()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Scan quarantine</button></div>
+      <p class="text-xs text-slate-500 mt-1">"Deleted" files live here and stay recoverable. Scan to see how much space they use; <b>Purge</b> permanently frees it — the only action that truly erases files.</p>
+      <div id="quar" class="text-sm mt-2"></div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mt-3">
+      <h3 class="font-medium mb-2">Enrichment jobs</h3>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="probe-btn" onclick="probeToggle()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Start probe</button>
+        <span id="probe-state" class="text-sm text-slate-600"></span>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">Probe fills runtime/resolution/codec/audio (powers the Duplicates split &amp; Arabic Audio). Slow over the share, but resumable — Start picks up where it left off.</p>
+      <div class="flex flex-wrap items-center gap-2 mt-3">
+        <button id="rematch-btn" onclick="rematchStart()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Re-match unmatched</button>
+        <span id="rematch-state" class="text-sm text-slate-600"></span>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">Looks up unmatched titles on TMDB/TVDB and tags them — one lookup per distinct title.</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mt-3">
+      <h3 class="font-medium mb-2">Database</h3>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="adminBackup()" class="border rounded px-3 py-1 text-sm">Back up now</button>
+        <button onclick="adminIntegrity()" class="border rounded px-3 py-1 text-sm">Integrity check</button>
+      </div>
+      <div id="admin-db" class="text-sm text-slate-600 mt-2"></div>
+    </div>
+  </section>
+</div>
+
+<!-- FIX / RELOCATE MODAL -->
+<div id="fixModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-5 max-h-[90vh] overflow-auto">
+    <div class="flex justify-between items-center mb-2">
+      <h3 class="font-medium">Fix &amp; relocate file</h3>
+      <button onclick="closeFix()" class="text-slate-400 hover:text-slate-700">✕</button>
+    </div>
+    <p id="fixFile" class="text-xs text-slate-500 break-all mb-3"></p>
+    <div class="flex gap-4 items-center text-sm mb-2">
+      <label><input type="radio" name="fixkind" value="movie" checked onchange="fixKindChange()"> Movie</label>
+      <label><input type="radio" name="fixkind" value="episode" onchange="fixKindChange()"> TV Episode</label>
+    </div>
+    <div class="flex flex-wrap gap-2 items-center mb-2">
+      <input id="fixName" placeholder="Correct title" class="border rounded px-2 py-1 text-sm flex-1">
+      <span id="fixSE" class="hidden gap-2">
+        <input id="fixSeason" type="number" min="0" placeholder="Season" class="border rounded px-2 py-1 w-20 text-sm">
+        <input id="fixEpisode" type="number" min="0" placeholder="Episode" class="border rounded px-2 py-1 w-20 text-sm">
+      </span>
+      <button onclick="fixLookup()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Look up</button>
+    </div>
+    <div id="fixCandidates" class="space-y-1 text-sm mb-2"></div>
+    <div id="fixPreview" class="text-sm"></div>
+  </div>
+</div>
+
+<script>
+const GB = b => (b/1e9).toFixed(2) + ' GB';
+const esc = s => (s+'').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+async function playFile(fp) {
+  const r = await fetch('/api/play', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({filepath: fp})});
+  if (!r.ok) { const e = await r.json(); alert('Could not open: ' + (e.detail||'error')); }
+}
+
+// ---- tabs ----
+function showTab(name) {
+  window.currentTab = name;
+  const tab = document.querySelector(`.tab[data-tab="${name}"]`);
+  const panel = (tab && tab.dataset.panel) || name;
+  document.querySelectorAll('section[data-panel]').forEach(p =>
+    p.classList.toggle('hidden', p.dataset.panel !== panel));
+  document.querySelectorAll('.tab').forEach(t => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('border-blue-600', on);
+    t.classList.toggle('text-blue-600', on);
+  });
+  if (name === 'dupsame' || name === 'dupdiff') {
+    if (!window.allGroups) loadDuplicates(() => setDupView(name)); else setDupView(name);
+  }
+  if (name === 'cleanup' && !window.cleanupLoaded) loadCleanup();
+  if (name === 'missing' && !window.missingLoaded) loadMissing();
+  if (name === 'subtitles' && !window.deficits) loadDeficits();
+  if (name === 'mismatch' && !window.mismatchLoaded) loadMismatch();
+  if (name === 'arabic' && !window.arabicLoaded) loadArabic();
+  if (name === 'review' && !window.review) loadReview();
+  if (name === 'admin') loadAdmin();
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
+
+// ---- overview ----
+async function loadOverview() {
+  const s = await (await fetch('/api/summary')).json();
+  const k = s.kpis;
+  document.getElementById('kpis').innerHTML = [
+    ['Total Items', k.total_items.toLocaleString()], ['Storage Used', GB(k.total_bytes)],
+    ['Needs Review', s.unmatched.toLocaleString()], ['Reclaimable (dupes)', GB(s.duplicate_reclaimable_bytes)]
+  ].map(([l,v]) => `<div class="bg-white rounded-lg shadow p-4">
+      <div class="text-xs uppercase text-slate-400">${l}</div>
+      <div class="text-xl font-semibold">${v}</div></div>`).join('');
+  document.getElementById('overview-extra').innerHTML = `
+    <p>&bull; <b>${s.duplicate_groups.toLocaleString()}</b> duplicate / variant groups to review
+       (potential <b>${GB(s.duplicate_reclaimable_bytes)}</b> reclaimable). Open the <b>Duplicates</b> tab.</p>
+    <p>&bull; <b>${s.subtitle_deficits.toLocaleString()}</b> files with no external English subtitle. Open the <b>Subtitles</b> tab.</p>
+    <p>&bull; <b>${s.unmatched.toLocaleString()}</b> files without a Jellyfin ID in <b>Needs Review</b>.</p>
+    ${s.arabic_movies ? `<p>&bull; <b>${s.arabic_movies.toLocaleString()}</b> movies with an Arabic audio track. Open the <b>Arabic Audio</b> tab.</p>` : ''}`;
+}
+
+// ---- mismatch videos (file name != folder name, movies only) ----
+async function loadMismatch() {
+  const d = await (await fetch('/api/mismatch')).json();
+  window.mismatchLoaded = true;
+  document.getElementById('mismatch-head').innerHTML =
+    `<b>${d.group_count}</b> folder(s) with mismatched video files &bull; <b>${d.file_count}</b> file(s) &bull; ${GB(d.total_bytes)}`;
+  document.getElementById('mismatch-list').innerHTML = d.groups.map(g => `
+    <div class="bg-white rounded-lg shadow p-3">
+      <div class="flex items-baseline justify-between mb-2">
+        <div class="font-medium break-all">${g.folder_name}</div>
+        <div class="text-xs text-slate-400 shrink-0 ml-2">${g.file_count} file(s) &bull; ${GB(g.total_bytes)}</div>
+      </div>
+      <div class="text-xs text-slate-400 mb-2 break-all">${g.folder}</div>
+      ${g.items.map(it => `
+        <div class="flex items-center gap-2 border-t py-1 text-sm" data-fp="${esc(it.filepath)}">
+          <span class="flex-1 break-all">${it.filename}</span>
+          <span class="text-xs text-slate-400 whitespace-nowrap">${GB(it.file_size_bytes||0)}</span>
+          <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play in VLC">&#9654;</button>
+          <button onclick="openFix('${esc(it.filepath)}')" class="text-blue-600 hover:underline shrink-0" title="Identify &amp; relocate this file">Fix</button>
+          <button onclick="mismatchDelete('${esc(it.filepath)}')" class="text-red-600 hover:underline shrink-0" title="Move this file to quarantine">Delete</button>
+        </div>`).join('')}
+    </div>`).join('') || '<p class="text-slate-400">No mismatched video files found in the movies library. 🎉</p>';
+}
+
+async function mismatchDelete(fp) {
+  const pr = await fetch('/api/delete/preview', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({filepath:fp})});
+  if (!pr.ok) { const e = await pr.json(); alert('Cannot delete: ' + (e.detail || 'error')); return; }
+  const prev = await pr.json();
+  if (!confirm(`Move ${prev.moves.length} file(s) to quarantine?\n\n` + prev.moves.map(m=>m[0]).join('\n'))) return;
+  const r = await fetch('/api/delete/execute', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({filepath:fp, confirm:true})});
+  if (!r.ok) { const e = await r.json(); alert('Delete failed: ' + (e.detail || 'error')); return; }
+  window.mismatchLoaded = false; loadMismatch(); loadOverview();
+}
+
+// ---- arabic audio ----
+async function loadArabic() {
+  const d = await (await fetch('/api/arabic')).json();
+  window.arabicLoaded = true;
+  document.getElementById('arabic-head').innerHTML =
+    `<b>${d.count}</b> movie(s) with an Arabic audio track &bull; ${GB(d.total_bytes)}`;
+  document.getElementById('arabic-list').innerHTML = d.items.map(it => `
+    <div class="flex items-center gap-2 border-b py-1" data-fp="${esc(it.filepath)}">
+      <span class="flex-1 truncate" title="${it.filepath}">${it.title}
+        <span class="text-slate-400">(${(it.audio_languages||[]).join(', ')})</span></span>
+      <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play in VLC">&#9654;</button>
+      <button onclick="moveArabic('${esc(it.filepath)}')" class="text-blue-600 hover:underline shrink-0">Move &rarr; 02-ArabicReady</button>
+    </div>`).join('') || '<p class="text-slate-400">No Arabic-audio movies found yet (probe still running?).</p>';
+}
+
+async function moveArabic(fp) {
+  const pv = await (await fetch('/api/arabic/preview', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({filepath:fp})})).json();
+  if (pv.dest_exists) { alert('Target file already exists — not moving (no overwrite):\n\n' + pv.dest); return; }
+  if (!confirm('Move this video file?\n\nFrom: ' + pv.src + '\nTo:   ' + pv.dest)) return;
+  const r = await fetch('/api/arabic/move', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({filepath:fp, confirm:true})});
+  if (r.ok) {
+    // remove the row from whichever tab it was triggered in (Arabic list or a dup card)
+    document.querySelector(`#arabic-list [data-fp="${CSS.escape(fp)}"]`)?.remove();
+    document.getElementById(fpId(fp))?.remove();
+  } else {
+    const e = await r.json(); alert('Move failed: ' + (e.detail || 'error'));
+  }
+}
+
+// ---- duplicates (one group at a time; two runtime-filtered views) ----
+let dupi = 0;
+async function loadDuplicates(cb) {
+  window.allGroups = await (await fetch('/api/variants')).json();
+  if (cb) cb();
+}
+window.dupKind = 'all';
+function dupSetKind(v) { window.dupKind = v; setDupView(window.currentTab); }
+function setDupView(name) {
+  const kind = window.dupKind || 'all';
+  const pool = (window.allGroups || []).filter(g => kind === 'all' || g.kind === kind);
+  const want = name === 'dupsame' ? ['same'] : ['different', 'unknown'];
+  window.groups = pool.filter(g => want.includes(g.runtime_class));
+  dupi = 0;
+  const counts = {same:0, different:0, unknown:0};
+  pool.forEach(g => counts[g.runtime_class]++);
+  const s = document.getElementById('dupstatus');
+  let msg = `<b>${counts.same}</b> same-length &bull; <b>${counts.different}</b> different-length`;
+  if (counts.unknown) msg += ` &bull; <span class="text-amber-600"><b>${counts.unknown}</b> not yet probed — run <code>python probe_dupes.py config.yaml</code> to classify them (they show under “Diff length” for now)</span>`;
+  s.innerHTML = msg;
+  renderDup();
+}
+function fpId(fp) { return 'r' + Math.abs(fp.split('').reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0)); }
+function renderDup() {
+  const g = window.groups[dupi];
+  document.getElementById('dupnav').innerHTML = window.groups.length
+    ? `Group <input id="dupjump" type="number" min="1" max="${window.groups.length}" value="${dupi+1}"
+         onkeydown="if(event.key==='Enter')dupJump()" onchange="dupJump()"
+         class="w-16 border rounded px-1 py-0.5 text-center" title="Type a group number and press Enter to jump"> of ${window.groups.length}`
+    : '';
+  const card = document.getElementById('dupcard');
+  if (!g) { card.innerHTML = '<p class="text-slate-500">No duplicate groups. 🎉</p>'; return; }
+  card.innerHTML = `<div class="bg-white rounded-lg shadow p-5">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-medium">${g.title || g.metadata_id}</div>
+      <div class="text-xs text-slate-500">${g.items.length} copies &bull; reclaim ${GB(g.reclaimable_bytes)}</div>
+    </div>
+    <div id="verbanner" class="text-sm rounded px-3 py-2 my-2 bg-slate-100 text-slate-500">⏳ Inspecting runtimes…</div>
+    <table class="w-full text-sm mt-1">
+      <thead><tr class="text-xs text-slate-400 text-left">
+        <th class="py-1">File</th><th>Format</th><th>Runtime</th><th>Resolution</th><th>Codec</th><th>Embedded subs</th><th class="text-right">Size</th><th></th></tr></thead>
+      <tbody>${g.items.map(it => `
+      <tr id="${fpId(it.filepath)}" class="border-t ${it.is_keeper ? 'bg-green-50' : ''}">
+        <td class="py-2 pr-2">${it.is_keeper ? '<span class="text-green-700 font-medium">KEEP?</span> ' : ''}<span class="break-all">${it.filepath.split('/').pop()}</span><div class="itl text-xs"></div></td>
+        <td class="py-2 px-2"><span class="px-1.5 py-0.5 rounded text-xs ${it.is_legacy ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}">${it.format}${it.is_legacy ? ' legacy' : ''}</span></td>
+        <td class="rt py-2 px-2 text-slate-400">…</td>
+        <td class="res py-2 px-2 text-slate-400">…</td>
+        <td class="cod py-2 px-2 text-slate-400">…</td>
+        <td class="subs py-2 px-2 text-slate-400">…</td>
+        <td class="py-2 px-2 text-right whitespace-nowrap">${GB(it.file_size_bytes)}</td>
+        <td class="py-2 pl-2 text-right whitespace-nowrap">
+          <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline" title="Play in VLC">▶</button>
+          <button onclick="openFix('${esc(it.filepath)}')" class="text-blue-600 hover:underline ml-1" title="Wrong movie/show? Fix &amp; relocate">Fix</button>
+          <button onclick="dupDelete('${esc(it.filepath)}')" class="${it.is_keeper ? 'text-slate-400' : 'text-red-600'} hover:underline ml-1" title="${it.is_keeper ? 'This is the suggested keep — delete anyway?' : 'Move to quarantine'}">Delete</button>
+          <button onclick="moveArabic('${esc(it.filepath)}')" class="text-emerald-700 hover:underline ml-1" title="Move just this file to 02-ArabicReady">&rarr; Arabic</button></td>
+      </tr>`).join('')}</tbody></table>
+    <p class="text-xs text-slate-400 mt-2">KEEP? = suggested keeper (newest format / largest) — just a hint. You can delete <b>any</b> copy, including the suggested one. Confirm runtimes above before deleting.</p>
+  </div>`;
+  probeGroup(g);
+}
+// Fetch (and cache on the group) the on-demand ffprobe for a group. Deduplicates
+// in-flight requests so prefetch + render don't double-probe.
+async function fetchGroupProbe(g) {
+  if (!g) return null;
+  if (g._probe) return g._probe;
+  if (g._probing) return g._probing;
+  g._probing = (async () => {
+    try {
+      const data = await (await fetch('/api/variant/probe', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({filepaths: g.items.map(i=>i.filepath)})})).json();
+      g._probe = data;
+      return data;
+    } catch(e) { return null; }
+    finally { g._probing = null; }
+  })();
+  return g._probing;
+}
+// Warm the next 2 groups' probe data in the background so Next is instant.
+function prefetchDupGroups() {
+  for (let k = 1; k <= 2; k++) fetchGroupProbe(window.groups[dupi + k]);
+}
+async function probeGroup(g) {
+  const data = await fetchGroupProbe(g);
+  if (window.groups[dupi] !== g) return; // user navigated away
+  if (!data) { document.getElementById('verbanner').textContent='Could not probe (ffprobe unavailable).'; return; }
+  data.items.forEach(it => {
+    const row = document.getElementById(fpId(it.filepath)); if (!row) return;
+    row.querySelector('.rt').innerHTML = it.duration_label
+      ? (it.edition ? `${it.duration_label} <span class="text-purple-700">(${it.edition})</span>` : it.duration_label)
+      : '<span class="text-amber-600">n/a</span>';
+    row.querySelector('.rt').classList.remove('text-slate-400');
+    row.querySelector('.res').textContent = it.resolution || '—';
+    row.querySelector('.res').classList.remove('text-slate-400');
+    row.querySelector('.cod').textContent = it.video_codec || '—';
+    row.querySelector('.cod').classList.remove('text-slate-400');
+    const subc = row.querySelector('.subs'); subc.classList.remove('text-slate-400');
+    const langs = it.subtitle_languages ? JSON.parse(it.subtitle_languages) : [];
+    if (it.embedded_english_subtitle === 'yes') subc.innerHTML = '<span class="text-green-700">eng ✓</span>' + (langs.length>1?` +${langs.length-1}`:'');
+    else if (langs.length) subc.innerHTML = `<span class="text-slate-500">${langs.join(', ')}</span>`;
+    else subc.textContent = 'none';
+    const itl = row.querySelector('.itl');
+    if (it.container_title) {
+      itl.className = 'itl text-xs ' + (it.title_mismatch ? 'text-red-600' : 'text-slate-400');
+      itl.textContent = (it.title_mismatch ? '⚠ embedded title (mismatch): ' : 'embedded title: ') + '“' + it.container_title + '”';
+    }
+  });
+  const b = document.getElementById('verbanner');
+  if (data.possible_versions) {
+    b.className = 'text-sm rounded px-3 py-2 my-2 bg-red-50 text-red-700 border border-red-200';
+    b.innerHTML = '⚠ <b>Possibly different versions, not duplicates</b> — ' + data.reason + '. Review before deleting anything.';
+  } else {
+    b.className = 'text-sm rounded px-3 py-2 my-2 bg-green-50 text-green-700';
+    b.textContent = '✓ ' + data.reason;
+  }
+  prefetchDupGroups();
+}
+function dupNext() { if (dupi < window.groups.length-1) { dupi++; renderDup(); } }
+function dupPrev() { if (dupi > 0) { dupi--; renderDup(); } }
+function dupJump() {
+  const v = parseInt((document.getElementById('dupjump')||{}).value, 10);
+  if (isNaN(v)) return;
+  const target = Math.min(Math.max(1, v), window.groups.length) - 1;
+  if (target !== dupi) { dupi = target; renderDup(); }
+}
+async function dupDelete(fp) {
+  const prev = await (await fetch('/api/delete/preview',
+    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filepath: fp})})).json();
+  if (!confirm(`Move ${prev.moves.length} file(s) to quarantine?\n\n` + prev.moves.map(m=>m[0]).join('\n'))) return;
+  await fetch('/api/delete/execute',
+    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filepath: fp, confirm: true})});
+  const g = window.groups[dupi];
+  g.items = g.items.filter(it => it.filepath !== fp);
+  g._probe = null;  // group changed — re-probe fresh next render
+  if (g.items.length < 2) {
+    window.groups.splice(dupi, 1);
+    const ai = (window.allGroups || []).indexOf(g);
+    if (ai >= 0) window.allGroups.splice(ai, 1);
+    if (dupi >= window.groups.length) dupi = Math.max(0, window.groups.length - 1);
+  }
+  renderDup(); loadOverview();
+}
+
+// ---- subtitles ----
+let loggedIn = false, defOffset = 0, defLimit = 50;
+function showQuota(q) {
+  if (!q) return;
+  const el = document.getElementById('quota');
+  if (q.remaining !== undefined && q.remaining !== null)
+    el.textContent = `Quota: ${q.remaining} left today` + (q.reset_time ? ` (resets in ${q.reset_time})` : '');
+}
+async function subLogin() {
+  const r = await fetch('/api/subtitles/login', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username: osuser.value, password: ospass.value})});
+  const m = document.getElementById('loginmsg');
+  if (r.ok) { loggedIn = true; ospass.value=''; m.textContent='Logged in ✓'; m.className='text-green-600'; }
+  else { m.textContent='Login failed'; m.className='text-red-600'; }
+}
+async function loadDeficits() {
+  const rows = await (await fetch(`/api/subtitles/deficits?offset=${defOffset}&limit=${defLimit}`)).json();
+  window.deficits = rows;
+  document.getElementById('defnav').textContent = `Showing ${defOffset+1}–${defOffset+rows.length}`;
+  document.getElementById('deficits').innerHTML = rows.length ? rows.map(r => `
+    <div class="bg-white rounded shadow px-3 py-1.5 flex items-center justify-between gap-2">
+      <span class="break-all flex-1">${r.filepath}</span>
+      <span class="emb text-xs whitespace-nowrap"></span>
+      <span class="text-xs text-slate-400 whitespace-nowrap">${GB(r.file_size_bytes||0)}</span>
+      <button onclick="playFile('${esc(r.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play in VLC">▶</button>
+      <button onclick="checkEmbedded(this, '${esc(r.filepath)}')" class="text-slate-600 hover:underline shrink-0">Check built-in</button>
+      <button onclick="subFetch(this, '${esc(r.filepath)}')" class="text-blue-600 hover:underline shrink-0">Fetch sub</button>
+    </div>`).join('') : '<p class="text-slate-500">None on this page.</p>';
+}
+async function checkEmbedded(btn, fp) {
+  btn.textContent='…'; btn.disabled=true;
+  const d = await (await fetch('/api/file/subs?filepath=' + encodeURIComponent(fp))).json();
+  const langs = d.subtitle_languages ? JSON.parse(d.subtitle_languages) : [];
+  const cell = btn.parentElement.querySelector('.emb');
+  if (d.embedded_english_subtitle === 'yes') cell.innerHTML = '<span class="text-green-700">has built-in English — skip</span>';
+  else if (langs.length) cell.innerHTML = `<span class="text-amber-600">built-in: ${langs.join(', ')} (no eng)</span>`;
+  else cell.innerHTML = '<span class="text-slate-400">no built-in subs</span>';
+  btn.textContent='Check built-in'; btn.disabled=false;
+}
+function defNext() { defOffset += defLimit; loadDeficits(); }
+function defPrev() { defOffset = Math.max(0, defOffset-defLimit); loadDeficits(); }
+async function subFetch(btn, fp) {
+  if (!loggedIn) { alert('Log in to OpenSubtitles first.'); return; }
+  btn.textContent='Fetching…'; btn.disabled=true;
+  const r = await fetch('/api/subtitles/fetch', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({filepath: fp})});
+  const b = await r.json(); showQuota(b.quota);
+  if (r.status === 429) { btn.textContent='Quota done — resets in '+(b.quota?.reset_time||'?'); btn.className='text-red-600 shrink-0'; }
+  else if (b.ok) { btn.textContent='Done ✓ '+(b.release||''); btn.className='text-green-600 shrink-0'; }
+  else { btn.textContent = b.reason==='no_subtitles_found' ? 'None found' : 'Failed'; btn.disabled=false; }
+}
+
+// ---- cleanup (legacy duplicates) ----
+async function loadCleanup() {
+  window.cleanupLoaded = true;
+  const d = await (await fetch('/api/cleanup/legacy')).json();
+  const head = document.getElementById('cleanup-head');
+  const list = document.getElementById('cleanup-list');
+  if (!d.count) { head.innerHTML=''; list.innerHTML = '<p class="text-slate-500">No legacy duplicates. 🎉</p>'; return; }
+  head.innerHTML = `<div class="text-sm"><b>${d.count}</b> legacy files &bull; <b>${GB(d.total_bytes)}</b> reclaimable</div>
+    <button onclick="cleanupAll(${d.count}, ${d.total_bytes})" class="bg-red-600 text-white rounded px-3 py-1 text-sm">Quarantine all ${d.count}</button>`;
+  list.innerHTML = d.targets.map(t => `
+    <div class="bg-white rounded shadow px-3 py-1.5 flex items-center justify-between gap-2">
+      <span class="break-all flex-1">${t.filepath}</span>
+      <span class="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 shrink-0">${t.format}</span>
+      <span class="text-xs text-slate-400 whitespace-nowrap">${GB(t.file_size_bytes)}</span>
+      <button onclick="playFile('${esc(t.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play in VLC">▶</button>
+      <button onclick="dupDelete('${esc(t.filepath)}')" class="text-red-600 hover:underline shrink-0">Delete</button>
+    </div>`).join('');
+}
+async function cleanupAll(n, bytes) {
+  if (!confirm(`Move all ${n} legacy files (${GB(bytes)}) to quarantine?\n\nEach keeps the modern copy and its shared subtitles/NFO. Nothing is erased — files go to quarantine.`)) return;
+  const head = document.getElementById('cleanup-head');
+  head.innerHTML = '<span class="text-slate-500">Quarantining…</span>';
+  const r = await (await fetch('/api/cleanup/legacy/execute', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirm:true})})).json();
+  alert(`Moved ${r.moved} files to quarantine (${GB(r.reclaimed_bytes)} reclaimed).`);
+  window.cleanupLoaded = false; loadCleanup(); loadOverview();
+}
+
+// ---- missing episodes ----
+const he = s => (s + '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+let _missing = [];
+async function loadMissing() {
+  window.missingLoaded = true;
+  const el = document.getElementById('missing');
+  el.innerHTML = '<p class="text-slate-400">Loading…</p>';
+  _missing = await (await fetch('/api/missing')).json();
+  const sel = document.getElementById('missFilter');
+  sel.innerHTML = `<option value="">All shows (${_missing.length})</option>` +
+    _missing.map((s, i) => `<option value="${i}">${he(s.title || s.metadata_id)} — ${s.missing_count}</option>`).join('');
+  renderMissing();
+}
+function renderMissing() {
+  const el = document.getElementById('missing');
+  const sum = document.getElementById('miss-summary');
+  if (!_missing.length) {
+    el.innerHTML = '<p class="text-slate-500">No missing episodes found. If this looks wrong, run <code>gaps_live.py</code> first to fetch each show\'s episode list.</p>';
+    sum.textContent = ''; return;
+  }
+  const pick = document.getElementById('missFilter').value;
+  const q = (document.getElementById('missSearch').value || '').toLowerCase();
+  let shows = pick !== '' ? [_missing[+pick]] : _missing;
+  if (pick === '' && q) shows = shows.filter(s => (s.title || s.metadata_id).toLowerCase().includes(q));
+  const totalMissing = _missing.reduce((a, s) => a + s.missing_count, 0);
+  sum.innerHTML = `<b>${_missing.length}</b> shows · <b>${totalMissing}</b> episodes missing` +
+    (shows.length !== _missing.length ? ` · showing ${shows.length}` : '');
+  const pad = n => String(n).padStart(2, '0');
+  const open = pick !== '' || shows.length <= 3;   // expand when narrowed to a few
+  el.innerHTML = shows.map(s => {
+    const bySeason = {};
+    s.missing.forEach(m => (bySeason[m.season] = bySeason[m.season] || []).push(m.episode));
+    const seasons = Object.keys(bySeason).map(Number).sort((a, b) => a - b).map(se =>
+      `<div class="flex gap-2"><span class="text-slate-400 shrink-0 w-12">S${pad(se)}</span>
+        <span class="break-words">${bySeason[se].sort((a, b) => a - b).map(e => 'E' + pad(e)).join(', ')}</span></div>`).join('');
+    return `<details class="bg-white rounded-lg shadow" ${open ? 'open' : ''}>
+      <summary class="flex items-center justify-between gap-2 p-3 cursor-pointer select-none">
+        <span class="font-medium">${he(s.title || s.metadata_id)}</span>
+        <span class="text-xs whitespace-nowrap">
+          <span class="inline-block bg-amber-100 text-amber-800 rounded px-2 py-0.5">${s.missing_count} missing</span>${s.upcoming_count ? ` <span class="text-slate-400">${s.upcoming_count} upcoming</span>` : ''}</span>
+      </summary>
+      <div class="px-3 pb-3 space-y-1 text-slate-600">${seasons}</div>
+    </details>`;
+  }).join('') || '<p class="text-slate-400">No shows match your search.</p>';
+}
+
+// ---- needs review ----
+async function loadReview() {
+  window.review = await (await fetch('/api/unmatched')).json();
+  document.getElementById('review').innerHTML = window.review.length
+    ? window.review.slice(0,500).map(u => `<div class="bg-white rounded shadow px-3 py-1 flex items-center justify-between gap-2">
+        <span class="break-all flex-1">${u.filepath}</span>
+        <button onclick="playFile('${esc(u.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play in VLC">▶</button>
+        <button onclick="openFix('${esc(u.filepath)}')" class="text-blue-600 hover:underline shrink-0">Fix</button></div>`).join('')
+    : '<p class="text-slate-500">Everything has an ID. 🎉</p>';
+}
+
+// ---- admin ----
+async function refreshAdmin(btn) {
+  const orig = btn.textContent;
+  btn.textContent = 'refreshing…'; btn.style.pointerEvents = 'none';
+  try { await loadAdmin(); } finally { btn.textContent = orig; btn.style.pointerEvents = ''; }
+}
+async function loadAdmin() {
+  const s = await (await fetch('/api/admin/status')).json();
+  const when = s.db_mtime ? new Date(s.db_mtime * 1000).toLocaleString() : '—';
+  document.getElementById('admin-status').innerHTML = [
+    ['Catalog rows', s.rows.toLocaleString()],
+    ['Probed (runtime/audio)', s.probed.toLocaleString()],
+    ['Unmatched', s.unmatched.toLocaleString()],
+    ['Episode lists cached', s.episode_cache_series.toLocaleString()],
+    ['Backslash/SMB paths', s.backslash_paths + (s.backslash_paths ? ' ⚠️' : ' ✓')],
+    ['DB updated', when],
+    ['Build', he(s.build_id)],
+    ['Checked at', new Date().toLocaleTimeString()],
+  ].map(([k, v]) => `<div class="flex justify-between gap-4"><span class="text-slate-400">${k}</span><span class="text-right">${v}</span></div>`).join('');
+  loadAdminQuota();
+  probeRefresh();
+}
+async function probeRefresh() {
+  clearTimeout(window._probeTimer);
+  const st = await (await fetch('/api/admin/probe/status')).json();
+  document.getElementById('probe-btn').textContent = st.running ? 'Stop probe' : 'Start probe';
+  // floor so it never reads 100% while any files remain (some are unreadable)
+  const pct = st.target ? Math.min(100, Math.floor(st.probed / st.target * 100)) : 0;
+  // When idle with a small remainder, those files couldn't be probed (corrupt /
+  // unreadable / DVD fragments) — list them so it's clear it's not "stuck".
+  let tail = '';
+  if (!st.running && st.remaining > 0 && (st.remaining_paths || []).length) {
+    tail = `<details class="mt-1"><summary class="cursor-pointer text-amber-600">${st.remaining} file(s) couldn't be probed (likely corrupt/unreadable) — show</summary>
+      <div class="max-h-40 overflow-auto text-xs text-slate-500 space-y-0.5 border rounded p-2 mt-1">${st.remaining_paths.map(p => `<div class="break-all">${he(p)}</div>`).join('')}</div></details>`;
+  }
+  document.getElementById('probe-state').innerHTML =
+    `${st.running ? 'running' : 'idle'} · <b>${st.probed.toLocaleString()}</b> / ${st.target.toLocaleString()} probed · ${st.remaining.toLocaleString()} remaining (${pct}%)
+     <div class="mt-1 h-2 w-64 max-w-full bg-slate-200 rounded overflow-hidden"><div class="h-2 bg-emerald-500" style="width:${pct}%"></div></div>${tail}`;
+  if (st.running) window._probeTimer = setTimeout(probeRefresh, 3000);   // live updates while running
+}
+async function probeToggle() {
+  const st = await (await fetch('/api/admin/probe/status')).json();
+  await fetch(st.running ? '/api/admin/probe/stop' : '/api/admin/probe/start', {method: 'POST'});
+  setTimeout(probeRefresh, 600);
+}
+async function rematchStart() {
+  const btn = document.getElementById('rematch-btn'), el = document.getElementById('rematch-state');
+  btn.disabled = true; el.textContent = 'Starting…';
+  await fetch('/api/admin/rematch/start', {method: 'POST'});
+  const poll = async () => {
+    const st = await (await fetch('/api/admin/rematch/status')).json();
+    if (st.running) { el.textContent = `Matching… ${st.checked} title(s)`; setTimeout(poll, 800); return; }
+    btn.disabled = false;
+    if (st.phase === 'error') { el.innerHTML = `<span class="text-red-600">Failed: ${he(st.error || '')}</span>`; return; }
+    el.innerHTML = `<span class="text-green-700">Matched ${st.newly_matched} of ${st.groups} title(s).</span>`;
+    loadAdmin();
+  };
+  poll();
+}
+async function loadAdminQuota() {
+  const el = document.getElementById('admin-quota');
+  const q = await (await fetch('/api/subtitles/quota')).json();
+  if (!q.logged_in) { el.innerHTML = 'Not logged in — log in on the <b>Subtitles</b> tab to see your quota.'; return; }
+  const row = (k, v) => `<div class="flex justify-between"><span class="text-slate-400">${k}</span><span>${v}</span></div>`;
+  el.innerHTML = row('Used today', `<b>${q.used ?? '?'}</b> / ${q.allowed ?? '?'}`) +
+    row('Remaining', q.remaining ?? '?') + row('Resets in', q.reset_time || '—');
+}
+async function adminBackup() {
+  const el = document.getElementById('admin-db'); el.textContent = 'Backing up…';
+  const r = await (await fetch('/api/admin/backup', {method: 'POST'})).json();
+  el.innerHTML = `Backed up (${GB(r.size_bytes)}) → <code class="break-all">${he(r.path)}</code>`;
+}
+async function adminIntegrity() {
+  const el = document.getElementById('admin-db'); el.textContent = 'Checking…';
+  const r = await (await fetch('/api/admin/integrity', {method: 'GET'})).json();
+  el.innerHTML = r.result === 'ok' ? '<span class="text-green-700">Integrity OK ✓</span>'
+    : `<span class="text-red-600">Integrity issues: ${he(r.result).slice(0, 300)}</span>`;
+}
+async function adminSyncScan() {
+  const btn = document.getElementById('admin-sync-btn'), el = document.getElementById('admin-sync');
+  btn.disabled = true; el.textContent = 'Starting…';
+  await fetch('/api/admin/sync/scan', {method: 'POST'});
+  const poll = async () => {
+    const st = await (await fetch('/api/admin/sync/status')).json();
+    if (st.phase === 'scanning') {
+      el.textContent = `Checking ${st.checked.toLocaleString()}${st.total ? ` / ${st.total.toLocaleString()}` : ''} files…`;
+      setTimeout(poll, 800); return;
+    }
+    btn.disabled = false;
+    if (st.phase === 'error') { el.innerHTML = `<span class="text-red-600">Scan failed: ${he(st.error || '')}</span>`; return; }
+    if (!st.missing_count) { el.innerHTML = '<span class="text-green-700">No missing files — the catalog matches disk. ✓</span>'; return; }
+    el.innerHTML = `<div class="mb-1"><b>${st.missing_count}</b> catalogued file(s) no longer on disk:</div>
+      <div class="max-h-48 overflow-auto text-xs text-slate-500 space-y-0.5 border rounded p-2">${st.sample.map(p => `<div class="break-all">${he(p)}</div>`).join('')}${st.missing_count > st.sample.length ? `<div>…and ${st.missing_count - st.sample.length} more</div>` : ''}</div>
+      <button onclick="adminSyncApply(${st.missing_count})" class="bg-red-600 text-white rounded px-3 py-1 mt-2 text-sm">Remove ${st.missing_count} row(s)</button>`;
+  };
+  poll();
+}
+async function adminSyncApply(n) {
+  if (!confirm(`Remove ${n} catalog row(s) for deleted files? The DB is backed up first, and no files are touched.`)) return;
+  const el = document.getElementById('admin-sync'); el.textContent = 'Removing…';
+  const r = await (await fetch('/api/admin/sync/apply', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true})})).json();
+  el.innerHTML = `<span class="text-green-700">Removed ${r.removed} row(s).</span>` + (r.backup ? ` <span class="text-xs text-slate-500">Backup: <code class="break-all">${he(r.backup)}</code></span>` : '');
+  loadAdmin(); loadOverview();
+}
+
+async function quarScan() {
+  const btn = document.getElementById('quar-scan-btn'), el = document.getElementById('quar');
+  btn.disabled = true; el.textContent = 'Scanning quarantine…';
+  await fetch('/api/admin/quarantine/scan', {method: 'POST'});
+  const poll = async () => {
+    const st = await (await fetch('/api/admin/quarantine/status')).json();
+    if (st.running) { el.textContent = `Scanning… ${st.checked.toLocaleString()} files`; setTimeout(poll, 600); return; }
+    btn.disabled = false;
+    if (st.phase === 'error') { el.innerHTML = `<span class="text-red-600">Scan failed: ${he(st.error || '')}</span>`; return; }
+    if (!st.count) { el.innerHTML = '<span class="text-slate-500">Quarantine is empty.</span>'; return; }
+    el.innerHTML = `<div class="mb-2"><b>${st.count.toLocaleString()}</b> file(s) · <b>${GB(st.bytes)}</b> parked.</div>
+      <div class="text-xs text-slate-400 mb-1">Largest:</div>
+      <div class="max-h-40 overflow-auto text-xs text-slate-500 space-y-0.5 border rounded p-2">${st.largest.map(i => `<div class="flex justify-between gap-2"><span class="break-all">${he(i.path.split('/').slice(-2).join('/'))}</span><span class="shrink-0">${GB(i.bytes)}</span></div>`).join('')}</div>
+      <button onclick="quarPurge(${st.count}, ${st.bytes})" class="bg-red-600 text-white rounded px-3 py-1 mt-2 text-sm">Purge all (${GB(st.bytes)})</button>`;
+  };
+  poll();
+}
+async function quarPurge(count, bytes) {
+  if (!confirm(`Permanently delete ${count} quarantined file(s) and free ${GB(bytes)}? This CANNOT be undone.`)) return;
+  const el = document.getElementById('quar'); el.textContent = 'Purging…';
+  const r = await (await fetch('/api/admin/quarantine/purge', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true})})).json();
+  el.innerHTML = `<span class="text-green-700">Purged ${r.removed} file(s). Quarantine emptied.</span>`;
+}
+
+// ---- organize folder (per-file + batch decisions, before/after, cleanup) ----
+async function organizeScan() {
+  const folder = document.getElementById('orgFolder').value.trim();
+  if (!folder) { alert('Enter a folder path first.'); return; }
+  document.getElementById('org-head').textContent = 'Scanning… (probing each file — may take a moment over SMB)';
+  document.getElementById('org-list').innerHTML = '';
+  document.getElementById('org-actions').innerHTML = '';
+  const r = await fetch('/api/organize/scan', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({folder})});
+  if (!r.ok) { const e = await r.json();
+    document.getElementById('org-head').textContent = 'Error: ' + (e.detail || 'scan failed'); return; }
+  const d = await r.json();
+  window.orgFolder = d.folder;
+  window.orgMatched = d.items.filter(it => it.status === 'matched');   // index = position here
+  const skipped = d.items.filter(it => it.status !== 'matched');
+  const c = d.counts;
+  // batch controls (decide on ALL files at once) + per-file rows below
+  document.getElementById('org-head').innerHTML = `
+    <div class="mb-1"><b>${c.matched}</b> matched &bull; <b>${c.unmatched}</b> unidentified &bull; <b>${c.no_tags}</b> without episode tags</div>
+    <label class="mr-4"><input type="checkbox" id="org-all" checked onchange="orgToggleAll()"> <b>Select all</b></label>
+    <label title="After moving, quarantine leftover artwork/.nfo/trickplay and remove the emptied folder (only if every video moved)">
+      <input type="checkbox" id="org-cleanup" checked> Clean up leftovers &amp; remove emptied folder</label>`;
+  const rows = window.orgMatched.map((it, i) => {
+    const subs = (it.subtitles||[]).length ? ` <span class="text-emerald-700">+${it.subtitles.length} sub</span>` : '';
+    const rm = (it.remove||[]).length ? ` <span class="text-amber-600">−${it.remove.length} sidecar</span>` : '';
+    return `<label class="flex items-start gap-2 bg-white rounded shadow px-3 py-2 cursor-pointer">
+      <input type="checkbox" class="org-cb mt-1" data-i="${i}" checked onchange="orgCount()">
+      <div class="min-w-0">
+        <div class="text-xs text-slate-400 break-all"><span class="text-slate-500">before:</span> ${it.filename}</div>
+        <div class="break-all"><span class="text-slate-500 text-xs">after:</span> ${it.dest}${subs}${rm}</div>
+      </div></label>`;
+  });
+  const skipRows = skipped.map(it => {
+    const why = it.status === 'no_tags' ? 'no embedded episode tags'
+      : `not found on TVDB (${it.show||'?'} S${it.season} E${it.episode})`;
+    return `<div class="bg-slate-100 rounded px-3 py-1 text-slate-500 break-all">${it.filename} — ${why} (skipped)</div>`;
+  });
+  document.getElementById('org-list').innerHTML =
+    (rows.join('') + skipRows.join('')) || '<p class="text-slate-400">No video files found in that folder.</p>';
+  document.getElementById('org-actions').innerHTML = c.matched
+    ? `<button id="org-go" onclick="organizeApply()" class="bg-green-600 text-white rounded px-3 py-1">Move selected (<span id="org-count">${c.matched}</span>)</button>`
+    : '';
+}
+
+function orgToggleAll() {
+  const on = document.getElementById('org-all').checked;
+  document.querySelectorAll('.org-cb').forEach(cb => cb.checked = on);
+  orgCount();
+}
+function orgCount() {
+  const n = document.querySelectorAll('.org-cb:checked').length;
+  const span = document.getElementById('org-count'); if (span) span.textContent = n;
+  const go = document.getElementById('org-go'); if (go) go.disabled = (n === 0);
+  const all = document.getElementById('org-all');
+  if (all) all.checked = n === document.querySelectorAll('.org-cb').length;
+}
+
+async function organizeApply() {
+  const sel = [...document.querySelectorAll('.org-cb:checked')].map(cb => window.orgMatched[+cb.dataset.i]);
+  if (!sel.length) return;
+  const cleanup = document.getElementById('org-cleanup').checked;
+  if (!confirm(`Move ${sel.length} file(s) into TV Shows/01-Ready` +
+      (cleanup ? ', then quarantine leftovers and remove the emptied folder?' : '?'))) return;
+  document.getElementById('org-actions').textContent = 'Moving…';
+  const r = await fetch('/api/organize/apply', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({folder: window.orgFolder, items: sel, cleanup, confirm: true})});
+  if (!r.ok) { const e = await r.json();
+    document.getElementById('org-actions').textContent = 'Error: ' + (e.detail || 'move failed'); return; }
+  const d = await r.json();
+  let msg = `Moved ${d.moved} file(s), ${d.subtitles_moved} subtitle(s); quarantined ${d.removed} sidecar(s).`;
+  if (d.cleanup) msg += d.cleanup.reason
+    ? ` Leftovers kept (a video still remains).`
+    : ` Swept ${d.cleanup.swept} leftover(s)${d.cleanup.folder_removed ? ' and removed the folder' : ''}.`;
+  if (d.skipped) msg += ` ${d.skipped} skipped.`;
+  if (d.errors && d.errors.length) msg += ' Errors: ' + d.errors.map(e=>e.detail).join('; ');
+  document.getElementById('org-actions').innerHTML = `<span class="text-green-700">${msg}</span>`;
+  loadOverview();
+}
+
+// ---- fix / relocate ----
+let fixState = {};
+function fixKind() { return document.querySelector('input[name=fixkind]:checked').value; }
+function fixKindChange() { document.getElementById('fixSE').classList.toggle('hidden', fixKind() !== 'episode'); document.getElementById('fixSE').style.display = fixKind()==='episode'?'inline-flex':'none'; }
+function openFix(fp) {
+  fixState = {fp};
+  document.getElementById('fixFile').textContent = fp;
+  document.getElementById('fixName').value = '';
+  document.getElementById('fixCandidates').innerHTML = '';
+  document.getElementById('fixPreview').innerHTML = '';
+  document.querySelector('input[name=fixkind][value=movie]').checked = true;
+  fixKindChange();
+  document.getElementById('fixModal').classList.remove('hidden');
+}
+function closeFix() { document.getElementById('fixModal').classList.add('hidden'); }
+async function fixLookup() {
+  const kind = fixKind(), q = document.getElementById('fixName').value.trim();
+  if (!q) return;
+  const el = document.getElementById('fixCandidates');
+  el.innerHTML = '<p class="text-slate-400">Searching…</p>';
+  const cands = await (await fetch(`/api/relocate/search?kind=${kind}&query=${encodeURIComponent(q)}`)).json();
+  if (!cands.length) { el.innerHTML = '<p class="text-slate-500">No matches.</p>'; return; }
+  el.innerHTML = cands.slice(0,8).map(c =>
+    `<button onclick="fixPick('${esc(c.metadata_id)}', '${esc(c.title||'')}', ${c.year||'null'})"
+       class="block w-full text-left border rounded px-2 py-1 hover:bg-slate-50">
+       ${c.title || '?'} ${c.year ? `(${c.year})` : ''} <span class="text-slate-400 text-xs">${c.metadata_id}</span></button>`).join('');
+}
+async function fixPick(mid, title, year) {
+  const kind = fixKind();
+  const details = {metadata_id: mid, title, year: year || null};
+  if (kind === 'episode') {
+    const s = parseInt(document.getElementById('fixSeason').value);
+    const e = parseInt(document.getElementById('fixEpisode').value);
+    if (isNaN(s) || isNaN(e)) { alert('Enter the season and episode numbers first.'); return; }
+    details.season = s; details.episode = e;
+    const et = await (await fetch(`/api/relocate/episode?series_id=${encodeURIComponent(mid)}&season=${s}&episode=${e}`)).json();
+    details.ep_title = et.ep_title;
+  }
+  fixState.details = details; fixState.kind = kind;
+  const pv = await (await fetch('/api/relocate/preview', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({filepath: fixState.fp, kind, details})})).json();
+  document.getElementById('fixPreview').innerHTML = `<div class="border-t pt-2 mt-2">
+    <div class="text-slate-500">From:</div><div class="break-all">${pv.src}</div>
+    <div class="text-slate-500 mt-1">To:</div><div class="break-all text-green-700">${pv.dest}</div>
+    ${pv.dest_exists ? '<p class="text-red-600 mt-2">Destination already exists — won\'t overwrite.</p>'
+      : '<button onclick="fixConfirm()" class="bg-green-600 text-white rounded px-3 py-1 mt-2">Confirm move</button>'}</div>`;
+}
+async function fixConfirm() {
+  const r = await fetch('/api/relocate/execute', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({filepath: fixState.fp, kind: fixState.kind, details: fixState.details, confirm: true})});
+  const b = await r.json();
+  if (!r.ok) { alert('Move failed: ' + (b.detail || 'error')); return; }
+  alert('Moved to:\n' + b.dest);
+  closeFix();
+  window.allGroups = null; window.groups = null; window.review = null;
+  window.cleanupLoaded = false; window.deficits = null; window.mismatchLoaded = false;
+  if (window.currentTab) showTab(window.currentTab);
+  loadOverview();
+}
+
+loadOverview();
+showTab('overview');
+</script>
+</body></html>

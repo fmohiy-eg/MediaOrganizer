@@ -1,0 +1,54 @@
+# --- Library paths (scanned recursively) ---
+media_paths:
+  - /media/Movies
+  - /media/TV Shows
+
+# --- Storage / runtime ---
+database_path: /config/media_audit.db
+log_directory: /logs
+quarantine_path: /config/.quarantine     # single central quarantine
+
+# --- External API credentials ---
+api_keys:
+  tmdb: ""              # TMDB (movies)
+  tvdb: ""              # TVDB v4 (TV + broadcast timeline)
+  opensubtitles:
+    api_key: ""
+    username: ""
+    password: ""
+
+# --- Hashing thresholds ---
+hashing:
+  partial_hash_threshold_bytes: 20000000   # files larger than this use head/tail partial hashing
+  partial_chunk_bytes: 10000000            # head & tail chunk size for fast_hash
+
+# --- Audit thresholds ---
+audit:
+  duration_deviation_seconds: 120          # Release Protection tolerance vs. theatrical runtime
+  variant_priority:                        # quality ranking order (first = strongest)
+    - resolution
+    - bitrate
+    - codec        # HEVC/AV1 preferred over H.264
+    - audio_channels
+
+# --- External tooling ---
+ffprobe:
+  timeout_seconds: 30
+  retries: 3
+
+# --- API behavior ---
+api:
+  max_retries: 2
+  retry_backoff_seconds: 5
+  cache_ttl_days: 30
+
+# --- Scan behavior ---
+scan:
+  worker_threads: 4
+  # Modern + legacy formats (legacy indexed so duplicates/cleanup candidates surface)
+  valid_extensions: [".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".wmv", ".webm",
+                     ".rm", ".rmvb", ".mpg", ".mpeg", ".flv", ".vob", ".m2ts", ".divx"]
+
+# --- Safety ---
+safety:
+  dry_run_default: true                    # preview before any destructive action
