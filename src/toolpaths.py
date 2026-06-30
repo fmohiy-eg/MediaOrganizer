@@ -36,6 +36,14 @@ def resolve_ffprobe(configured, which_fn=shutil.which, isfile_fn=os.path.isfile)
     return which_fn("ffprobe") or "ffprobe"
 
 
+def ffprobe_is_available(binary, which_fn=shutil.which, isfile_fn=os.path.isfile):
+    """True if `binary` is an existing file or a PATH-resolvable command. Lets callers
+    tell a real install apart from resolve_ffprobe's last-resort 'ffprobe' literal."""
+    if not binary:
+        return False
+    return bool(isfile_fn(binary) or which_fn(binary))
+
+
 def resolve_player(configured, platform_name=sys.platform,
                    which_fn=shutil.which, isfile_fn=os.path.isfile):
     """configured -> which('vlc') -> platform default list -> None (use OS default)."""

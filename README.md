@@ -26,9 +26,22 @@ Runs **on a single machine** (media on a local, external, or mounted drive) or i
 
 ## Prerequisites
 
-- **Python 3.12+** and `pip install -r requirements.txt`.
-- **ffmpeg/ffprobe** — optional for the inventory scan, but required for the dashboard's on-demand runtime/codec/audio info. Install it and put `ffprobe` on your PATH (or set `ffprobe.binary` in config). Auto-detected on Windows/macOS/Linux.
-- **VLC** — optional; the "Play" button auto-detects it, else falls back to the OS default association.
+Install these **before** running setup:
+
+**1. Python 3.12+** — check with `python --version`. Get it from [python.org](https://www.python.org/downloads/) (on Windows, tick "Add Python to PATH" in the installer).
+
+**2. ffmpeg / ffprobe** — required for runtime/codec/audio info, the Duplicates length split, the audio-language flag, and the Probe panel. (The basic inventory scan works without it, but most features won't.) Install per your OS, then make sure `ffprobe` is on your PATH:
+
+| OS | Command |
+|----|---------|
+| Windows | `winget install ffmpeg`  (or `choco install ffmpeg`, or download from [ffmpeg.org](https://ffmpeg.org/download.html) and add its `bin` folder to PATH) |
+| macOS | `brew install ffmpeg` |
+| Linux (Debian/Ubuntu) | `sudo apt install ffmpeg` |
+| Linux (Fedora/RHEL) | `sudo dnf install ffmpeg` |
+
+Verify with `ffprobe -version`. It's auto-detected; if it lives somewhere off PATH, set `ffprobe.binary` in `config.yaml` to its full path. If it's missing, the dashboard prints a clear warning at startup and `probe_dupes.py` stops with an install hint.
+
+**3. VLC** *(optional)* — the "Play" button auto-detects VLC; without it, files open in your OS default player. Get it from [videolan.org](https://www.videolan.org/).
 
 ## Setup
 

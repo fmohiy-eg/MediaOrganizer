@@ -1,5 +1,5 @@
 import web_dashboard
-from src.toolpaths import resolve_ffprobe, resolve_player
+from src.toolpaths import resolve_ffprobe, resolve_player, ffprobe_is_available
 
 
 # --- resolve_ffprobe --------------------------------------------------------
@@ -30,6 +30,30 @@ def test_ffprobe_blank_falls_back_to_which():
 def test_ffprobe_last_resort_literal():
     got = resolve_ffprobe("", which_fn=lambda n: None, isfile_fn=lambda p: False)
     assert got == "ffprobe"
+
+
+# --- ffprobe_is_available ---------------------------------------------------
+
+def test_ffprobe_available_when_file_exists():
+    assert ffprobe_is_available("/opt/ffprobe",
+                                which_fn=lambda n: None,
+                                isfile_fn=lambda p: p == "/opt/ffprobe") is True
+
+
+def test_ffprobe_available_when_on_path():
+    assert ffprobe_is_available("ffprobe",
+                                which_fn=lambda n: "/usr/bin/ffprobe",
+                                isfile_fn=lambda p: False) is True
+
+
+def test_ffprobe_not_available_when_missing():
+    assert ffprobe_is_available("ffprobe",
+                                which_fn=lambda n: None,
+                                isfile_fn=lambda p: False) is False
+
+
+def test_ffprobe_not_available_when_blank():
+    assert ffprobe_is_available("", which_fn=lambda n: None, isfile_fn=lambda p: False) is False
 
 
 # --- resolve_player ---------------------------------------------------------

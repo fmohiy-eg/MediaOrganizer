@@ -15,7 +15,7 @@ import time
 from src.config import load_config
 from src.database import get_connection
 from src.repository import update_stream_fields
-from src.toolpaths import resolve_ffprobe
+from src.toolpaths import resolve_ffprobe, ffprobe_is_available
 from src.web.services import probe_targets
 from src.web.subtitle_fetch import to_local_path
 from src.probe import probe_streams
@@ -26,6 +26,11 @@ def main(config_path="config.yaml", limit=None):
     conn = get_connection(cfg["database_path"])
     pm = cfg.get("path_map", {})
     binary = resolve_ffprobe(cfg["ffprobe"].get("binary", ""))
+    if not ffprobe_is_available(binary):
+        print("ffprobe not found - this tool needs it to read runtimes/codecs/audio.\n"
+              "Install ffmpeg (see README \"Prerequisites\") or set ffprobe.binary in "
+              "config.yaml, then re-run.")
+        sys.exit(1)
 
     target = probe_targets(conn)   # dup-group files + movies, minus DVD VIDEO_TS fragments
     already_probed = {r["filepath"] for r in conn.execute(

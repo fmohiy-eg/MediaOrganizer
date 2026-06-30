@@ -14,7 +14,7 @@ import uvicorn
 
 from src.config import load_config
 from src.database import init_db
-from src.toolpaths import resolve_ffprobe, resolve_player
+from src.toolpaths import resolve_ffprobe, resolve_player, ffprobe_is_available
 from web_dashboard import create_app
 
 
@@ -33,11 +33,16 @@ def _build_id():
 def main(config_path="config.yaml", host="0.0.0.0", port=8080):
     config = load_config(config_path)
     init_db(config["database_path"])
+    ffprobe_binary = resolve_ffprobe(config["ffprobe"].get("binary", ""))
+    if not ffprobe_is_available(ffprobe_binary):
+        print("! ffprobe not found - runtime/codec/audio details and the Probe panel "
+              "won't work.\n  Install ffmpeg (see README \"Prerequisites\") or set "
+              "ffprobe.binary in config.yaml. The dashboard still runs.")
     app = create_app(
         config["database_path"], config["quarantine_path"],
         os_api_key=config["api_keys"]["opensubtitles"]["api_key"],
         path_map=config.get("path_map", {}),
-        ffprobe_binary=resolve_ffprobe(config["ffprobe"].get("binary", "")),
+        ffprobe_binary=ffprobe_binary,
         duration_deviation_seconds=config["audit"]["duration_deviation_seconds"],
         tmdb_api_key=config["api_keys"]["tmdb"],
         tvdb_api_key=config["api_keys"]["tvdb"],
