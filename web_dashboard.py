@@ -122,12 +122,19 @@ def launch_player(local_path, player_bin=None):
 
 
 def _search_params(filepath, row):
-    """Build OpenSubtitles search params from a media row (tmdb for movies, query for TV)."""
+    """Build OpenSubtitles search params from a media row. ALWAYS pins `type`
+    (movie/episode): a bare tmdb_id is ambiguous across TMDB's movie and TV id
+    spaces (e.g. movie 11519 = "1941", TV 11519 = "Weeds"), so without it the
+    search returns subtitles for the wrong title."""
     p = parse_path(filepath)
     mid = row["metadata_id"] or ""
     if p["item_type"] == "movie" and mid.startswith("tmdb:"):
-        return {"tmdb_id": int(mid.split(":")[1])}
-    params = {"query": p.get("series_title") or p.get("movie_title") or ""}
+        return {"tmdb_id": int(mid.split(":")[1]), "type": "movie"}
+    is_episode = p["item_type"] == "episode"
+    params = {"query": p.get("series_title") or p.get("movie_title") or "",
+              "type": "episode" if is_episode else "movie"}
+    if not is_episode and p.get("year"):
+        params["year"] = p["year"]                     # narrow generic movie titles
     if p.get("season_number") is not None:
         params["season_number"] = p["season_number"]
     if p.get("episode_number") is not None:

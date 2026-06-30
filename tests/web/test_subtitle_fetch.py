@@ -3,7 +3,31 @@ import os
 import zipfile
 from src.web.subtitle_fetch import (extract_subtitle_text, target_subtitle_path,
                                      ingest_subtitle, to_local_path, to_nas_path,
-                                     fetch_and_ingest)
+                                     fetch_and_ingest, _best)
+
+
+def test_best_prefers_bluray_with_sdh_over_more_downloaded():
+    res = [{"release": "Movie.1080p.WEBRip.x264", "hearing_impaired": False, "download_count": 9000},
+           {"release": "Movie.1080p.BluRay.x264", "hearing_impaired": True, "download_count": 120}]
+    assert _best(res)["release"] == "Movie.1080p.BluRay.x264"
+
+
+def test_best_sdh_detected_via_release_keyword():
+    res = [{"release": "Movie.BluRay.x264", "hearing_impaired": False, "download_count": 50},
+           {"release": "Movie.BluRay.x264.SDH", "hearing_impaired": False, "download_count": 40}]
+    assert _best(res)["release"] == "Movie.BluRay.x264.SDH"   # bluray+sdh beats bluray-only
+
+
+def test_best_partial_bluray_or_sdh_beats_neither():
+    res = [{"release": "Movie.HDTV", "hearing_impaired": False, "download_count": 9000},
+           {"release": "Movie.BluRay", "hearing_impaired": False, "download_count": 5}]
+    assert _best(res)["release"] == "Movie.BluRay"
+
+
+def test_best_falls_back_to_most_downloaded_when_no_bluray_or_sdh():
+    res = [{"release": "A.WEBRip", "hearing_impaired": False, "download_count": 5},
+           {"release": "B.HDTV", "hearing_impaired": False, "download_count": 99}]
+    assert _best(res)["download_count"] == 99
 
 SRT = "1\n00:00:01,000 --> 00:00:02,000\nHello\n"
 

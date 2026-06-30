@@ -5,6 +5,7 @@ Pure/injectable so it is testable without network or disk: the orchestration
 """
 import io
 import os
+import re
 import zipfile
 
 from src.web.subtitle_ingest import collision_safe_path
@@ -49,10 +50,25 @@ def ingest_subtitle(content, video_path, lang="eng",
     return {"target": target, "bytes_written": len(text.encode("utf-8"))}
 
 
+_BLURAY = ("bluray", "bdrip", "brrip", "bdremux")
+
+
+def _is_bluray(r):
+    text = re.sub(r"[\s._-]", "", ((r.get("release") or "") + (r.get("file_name") or "")).lower())
+    return any(k in text for k in _BLURAY)
+
+
+def _is_sdh(r):
+    if r.get("hearing_impaired"):
+        return True
+    return "sdh" in ((r.get("release") or "") + " " + (r.get("file_name") or "")).lower()
+
+
 def _best(results):
-    # Prefer the most-downloaded, non-hearing-impaired English subtitle.
-    return max(results, key=lambda r: ((r.get("hearing_impaired") is not True),
-                                       (r.get("download_count") or 0)))
+    # Prefer a Blu-ray + SDH subtitle; partial (Blu-ray OR SDH) beats neither;
+    # ties (and the no-match fallback) break by most-downloaded.
+    return max(results, key=lambda r: (_is_bluray(r) + _is_sdh(r),
+                                       r.get("download_count") or 0))
 
 
 def fetch_and_ingest(client, token, video_local_path, search_params, http_get,

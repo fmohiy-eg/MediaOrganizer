@@ -2,11 +2,32 @@ import os
 from fastapi.testclient import TestClient
 from src.database import init_db, get_connection
 from src.repository import upsert_media_file, get_media_row
-from web_dashboard import create_app
+from web_dashboard import create_app, _search_params
 
 # Audio-flag config matching the original "Arabic Audio" behaviour, for tests that
 # exercise the (now configurable) flagged-audio feature.
 _AF = {"languages": ["ara", "ar"], "label": "Arabic Audio", "staging_subdir": "02-ArabicReady"}
+
+
+def test_search_params_movie_constrains_to_movie_type():
+    # tmdb_id alone is ambiguous (movie 11519 = "1941", TV 11519 = "Weeds"); the
+    # search MUST pin type=movie or it pulls in TV subtitles.
+    p = _search_params("/share/Movies/01-Ready/1941 (1979)/1941 (1979).mp4",
+                       {"metadata_id": "tmdb:11519"})
+    assert p == {"tmdb_id": 11519, "type": "movie"}
+
+
+def test_search_params_episode_constrains_to_episode_type():
+    p = _search_params("/share/TV Shows/Show (2010)/Season 02/Show (2010) - S02E03 - X.mkv",
+                       {"metadata_id": "tvdb:5"})
+    assert p["type"] == "episode" and p["season_number"] == 2 and p["episode_number"] == 3
+    assert p["query"] == "Show"
+
+
+def test_search_params_unmatched_movie_uses_query_year_and_movie_type():
+    p = _search_params("/share/Movies/Heat (1995)/Heat (1995).mkv", {"metadata_id": None})
+    assert p["type"] == "movie" and p["query"] == "Heat" and p["year"] == 1995
+    assert "tmdb_id" not in p
 
 
 def _setup(tmp_path):
