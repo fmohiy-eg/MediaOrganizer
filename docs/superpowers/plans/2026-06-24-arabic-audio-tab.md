@@ -520,7 +520,7 @@ Movies that have an **Arabic audio track** (detected from the probe data).
 
 - [ ] **Step 3: Update memory**
 
-Edit `C:\Users\user\.claude\projects\C--Users-user-MyImageApp-media-organize-app-Claude\memory\arabic-audio-feature.md`: change status from "planned" to built, noting the tab, `arabic_audio_movies`, `arabic_target`, and the `02-ArabicReady` reparent. Update its one-line hook in `MEMORY.md` accordingly.
+Update the project memory: change the audio-feature status from "planned" to built, noting the tab, `arabic_audio_movies`, `arabic_target`, and the `02-ArabicReady` reparent.
 
 - [ ] **Step 4: Commit**
 

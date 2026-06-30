@@ -117,7 +117,7 @@
     <h2 class="text-lg font-medium mb-1">Organize a folder into the library</h2>
     <p class="text-xs text-slate-500 mb-3">Point at a folder this PC can reach (local or SMB). Reads each video's <b>embedded</b> show/season/episode tags (incl. a composite <code>title</code> tag), identifies the series on TVDB, and previews a <b>before → after</b> rename into <code>TV Shows/01-Ready</code>. <b>Nothing moves until you confirm.</b> Tick files individually or use <b>Select all</b>, then <b>Move selected</b>. Matching subtitles move &amp; are renamed alongside; with <b>Clean up leftovers</b> on, stray artwork/.nfo/trickplay are quarantined and the emptied folder removed (only when every video was moved out — nothing is ever erased).</p>
     <div class="flex flex-wrap gap-2 items-center mb-3">
-      <input id="orgFolder" placeholder="e.g. D:/Downloads/NewShow or //nas/Public/_incoming" class="border rounded px-2 py-1 text-sm flex-1 min-w-[22rem]">
+      <input id="orgFolder" placeholder="e.g. D:/Downloads/NewShow or //nas/share/_incoming" class="border rounded px-2 py-1 text-sm flex-1 min-w-[22rem]">
       <button onclick="organizeScan()" class="bg-slate-800 text-white rounded px-3 py-1 text-sm">Scan</button>
     </div>
     <div id="org-head" class="text-sm text-slate-600 mb-2"></div>
