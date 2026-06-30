@@ -43,6 +43,7 @@ def main(config_path="config.yaml", host="0.0.0.0", port=8080):
         tvdb_api_key=config["api_keys"]["tvdb"],
         media_paths=config["media_paths"],
         player_binary=resolve_player(config.get("player", {}).get("binary", "")),
+        audio_flag=config.get("audio_flag", {}),
         build_id=_build_id())
     print(f"Dashboard: http://{host}:{port}  (db={config['database_path']})")
     uvicorn.run(app, host=host, port=port)

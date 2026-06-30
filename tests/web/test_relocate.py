@@ -1,17 +1,17 @@
 import pytest
 from src.web.relocate import (sanitize, movie_target, episode_target,
-                              pick_roots, build_target, relocate_file, arabic_target)
+                              pick_roots, build_target, relocate_file, flagged_target)
 
 
-def test_arabic_target_reparents_under_subdir():
+def test_flagged_target_reparents_under_subdir():
     src = "/share/Movies/01-Ready/Heat (1995)/Heat (1995).mkv"
-    assert arabic_target("/share/Movies/01-Ready", src) == \
+    assert flagged_target("/share/Movies/01-Ready", src, "02-ArabicReady") == \
         "/share/Movies/01-Ready/02-ArabicReady/Heat (1995)/Heat (1995).mkv"
 
 
-def test_arabic_target_file_directly_in_root_uses_filename_stem():
+def test_flagged_target_file_directly_in_root_uses_filename_stem():
     src = "/share/Movies/01-Ready/loose.mkv"
-    assert arabic_target("/share/Movies/01-Ready", src) == \
+    assert flagged_target("/share/Movies/01-Ready", src, "02-ArabicReady") == \
         "/share/Movies/01-Ready/02-ArabicReady/loose/loose.mkv"
 
 

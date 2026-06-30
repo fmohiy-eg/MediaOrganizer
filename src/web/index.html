@@ -18,7 +18,7 @@
     <button data-tab="cleanup"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Cleanup</button>
     <button data-tab="missing"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Missing Episodes</button>
     <button data-tab="subtitles"  class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Subtitles</button>
-    <button data-tab="arabic"     data-panel="arabic" class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Arabic Audio</button>
+    <button data-tab="audioflag"  data-panel="audioflag" id="tab-audioflag" class="tab px-4 py-2 -mb-px border-b-2 border-transparent hidden">Flagged Audio</button>
     <button data-tab="review"     class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Needs Review</button>
     <button data-tab="organize"   class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Organize Folder</button>
     <button data-tab="admin"      class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Admin</button>
@@ -101,9 +101,9 @@
   </section>
 
   <!-- ARABIC AUDIO -->
-  <section data-panel="arabic" class="hidden">
-    <div id="arabic-head" class="flex items-center gap-3 mb-3 text-sm text-slate-600"></div>
-    <div id="arabic-list" class="space-y-1 text-sm"></div>
+  <section data-panel="audioflag" class="hidden">
+    <div id="audioflag-head" class="flex items-center gap-3 mb-3 text-sm text-slate-600"></div>
+    <div id="audioflag-list" class="space-y-1 text-sm"></div>
   </section>
 
   <!-- NEEDS REVIEW -->
@@ -229,7 +229,7 @@ function showTab(name) {
   if (name === 'missing' && !window.missingLoaded) loadMissing();
   if (name === 'subtitles' && !window.deficits) loadDeficits();
   if (name === 'mismatch' && !window.mismatchLoaded) loadMismatch();
-  if (name === 'arabic' && !window.arabicLoaded) loadArabic();
+  if (name === 'audioflag' && !window.audioflagLoaded) loadAudioFlag();
   if (name === 'review' && !window.review) loadReview();
   if (name === 'admin') loadAdmin();
 }
@@ -250,7 +250,7 @@ async function loadOverview() {
        (potential <b>${GB(s.duplicate_reclaimable_bytes)}</b> reclaimable). Open the <b>Duplicates</b> tab.</p>
     <p>&bull; <b>${s.subtitle_deficits.toLocaleString()}</b> files with no external English subtitle. Open the <b>Subtitles</b> tab.</p>
     <p>&bull; <b>${s.unmatched.toLocaleString()}</b> files without a Jellyfin ID in <b>Needs Review</b>.</p>
-    ${s.arabic_movies ? `<p>&bull; <b>${s.arabic_movies.toLocaleString()}</b> movies with an Arabic audio track. Open the <b>Arabic Audio</b> tab.</p>` : ''}`;
+    ${s.flagged_movies ? `<p>&bull; <b>${s.flagged_movies.toLocaleString()}</b> movies with a flagged audio track. Open the <b>${he(s.flagged_label || 'Flagged Audio')}</b> tab.</p>` : ''}`;
 }
 
 // ---- mismatch videos (file name != folder name, movies only) ----
@@ -289,31 +289,33 @@ async function mismatchDelete(fp) {
   window.mismatchLoaded = false; loadMismatch(); loadOverview();
 }
 
-// ---- arabic audio ----
-async function loadArabic() {
-  const d = await (await fetch('/api/arabic')).json();
-  window.arabicLoaded = true;
-  document.getElementById('arabic-head').innerHTML =
-    `<b>${d.count}</b> movie(s) with an Arabic audio track &bull; ${GB(d.total_bytes)}`;
-  document.getElementById('arabic-list').innerHTML = d.items.map(it => `
+// ---- audio-language flag ----
+async function loadAudioFlag() {
+  const d = await (await fetch('/api/audioflag')).json();
+  window.audioflagLoaded = true;
+  const label = window.flagLabel || 'Flagged Audio';
+  const sub = window.flagSubdir || '02-Ready';
+  document.getElementById('audioflag-head').innerHTML =
+    `<b>${d.count}</b> movie(s) with a flagged audio track &bull; ${GB(d.total_bytes)}`;
+  document.getElementById('audioflag-list').innerHTML = d.items.map(it => `
     <div class="flex items-center gap-2 border-b py-1" data-fp="${esc(it.filepath)}">
       <span class="flex-1 truncate" title="${it.filepath}">${it.title}
         <span class="text-slate-400">(${(it.audio_languages||[]).join(', ')})</span></span>
-      <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play in VLC">&#9654;</button>
-      <button onclick="moveArabic('${esc(it.filepath)}')" class="text-blue-600 hover:underline shrink-0">Move &rarr; 02-ArabicReady</button>
-    </div>`).join('') || '<p class="text-slate-400">No Arabic-audio movies found yet (probe still running?).</p>';
+      <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline shrink-0" title="Play">&#9654;</button>
+      <button onclick="moveAudioFlag('${esc(it.filepath)}')" class="text-blue-600 hover:underline shrink-0">Move &rarr; ${he(sub)}</button>
+    </div>`).join('') || `<p class="text-slate-400">No ${he(label)} movies found yet (probe still running?).</p>`;
 }
 
-async function moveArabic(fp) {
-  const pv = await (await fetch('/api/arabic/preview', {method:'POST',
+async function moveAudioFlag(fp) {
+  const pv = await (await fetch('/api/audioflag/preview', {method:'POST',
     headers:{'Content-Type':'application/json'}, body:JSON.stringify({filepath:fp})})).json();
   if (pv.dest_exists) { alert('Target file already exists — not moving (no overwrite):\n\n' + pv.dest); return; }
   if (!confirm('Move this video file?\n\nFrom: ' + pv.src + '\nTo:   ' + pv.dest)) return;
-  const r = await fetch('/api/arabic/move', {method:'POST',
+  const r = await fetch('/api/audioflag/move', {method:'POST',
     headers:{'Content-Type':'application/json'}, body:JSON.stringify({filepath:fp, confirm:true})});
   if (r.ok) {
-    // remove the row from whichever tab it was triggered in (Arabic list or a dup card)
-    document.querySelector(`#arabic-list [data-fp="${CSS.escape(fp)}"]`)?.remove();
+    // remove the row from whichever tab it was triggered in (the flag list or a dup card)
+    document.querySelector(`#audioflag-list [data-fp="${CSS.escape(fp)}"]`)?.remove();
     document.getElementById(fpId(fp))?.remove();
   } else {
     const e = await r.json(); alert('Move failed: ' + (e.detail || 'error'));
@@ -374,7 +376,7 @@ function renderDup() {
           <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline" title="Play in VLC">▶</button>
           <button onclick="openFix('${esc(it.filepath)}')" class="text-blue-600 hover:underline ml-1" title="Wrong movie/show? Fix &amp; relocate">Fix</button>
           <button onclick="dupDelete('${esc(it.filepath)}')" class="${it.is_keeper ? 'text-slate-400' : 'text-red-600'} hover:underline ml-1" title="${it.is_keeper ? 'This is the suggested keep — delete anyway?' : 'Move to quarantine'}">Delete</button>
-          <button onclick="moveArabic('${esc(it.filepath)}')" class="text-emerald-700 hover:underline ml-1" title="Move just this file to 02-ArabicReady">&rarr; Arabic</button></td>
+          ${window.flagEnabled ? `<button onclick="moveAudioFlag('${esc(it.filepath)}')" class="text-emerald-700 hover:underline ml-1" title="Move just this file to ${he(window.flagSubdir||'02-Ready')}">&rarr; ${he(window.flagLabel||'Flagged')}</button>` : ''}</td>
       </tr>`).join('')}</tbody></table>
     <p class="text-xs text-slate-400 mt-2">KEEP? = suggested keeper (newest format / largest) — just a hint. You can delete <b>any</b> copy, including the suggested one. Confirm runtimes above before deleting.</p>
   </div>`;
@@ -868,6 +870,23 @@ async function fixConfirm() {
   loadOverview();
 }
 
+// ---- feature bootstrap (labels + tab visibility from server config) ----
+async function bootstrapConfig() {
+  try {
+    const c = await (await fetch('/api/config')).json();
+    const af = c.audio_flag || {};
+    window.flagEnabled = !!af.enabled;
+    window.flagLabel = af.label || 'Flagged Audio';
+    window.flagSubdir = af.staging_subdir || '02-Ready';
+    const tab = document.getElementById('tab-audioflag');
+    if (tab) {
+      tab.textContent = window.flagLabel;
+      tab.classList.toggle('hidden', !window.flagEnabled);
+    }
+  } catch (e) { /* leave the tab hidden on error */ }
+}
+
+bootstrapConfig();
 loadOverview();
 showTab('overview');
 </script>

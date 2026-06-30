@@ -41,7 +41,7 @@ def episode_target(tv_root, series, year, season, episode, ep_title, ext):
     return _join(tv_root, series_folder, season_folder, stem + ext)
 
 
-def arabic_target(movies_root, filepath, subdir="02-ArabicReady"):
+def flagged_target(movies_root, filepath, subdir):
     """Reparent a movie's video file under <movies_root>/<subdir>/, keeping its
     parent-folder name and original filename. If the file sits directly in the
     movies root, use the filename stem as the folder so we never nest under the

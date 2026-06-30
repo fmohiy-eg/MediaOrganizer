@@ -178,8 +178,8 @@ def test_english_subtitle_deficits(tmp_path):
     assert deficits == ["/d/NoSub.mkv"]
 
 
-def test_arabic_audio_movies_filters_and_summarizes(tmp_path):
-    from src.web.services import arabic_audio_movies
+def test_flagged_audio_movies_filters_and_summarizes(tmp_path):
+    from src.web.services import flagged_audio_movies
     conn = _conn(tmp_path)
     # qualifies: movie with an Arabic-tagged track
     upsert_media_file(conn, _rec("/share/Movies/Heat (1995)/Heat (1995).mkv",
@@ -201,12 +201,35 @@ def test_arabic_audio_movies_filters_and_summarizes(tmp_path):
     # excluded: already moved into 02-ArabicReady
     upsert_media_file(conn, _rec("/share/Movies/02-ArabicReady/Done (1999)/Done (1999).mkv",
                                  item_type="movie", audio_languages='["ara"]'))
-    out = arabic_audio_movies(conn)
+    out = flagged_audio_movies(conn, ["ara", "ar"], "02-ArabicReady")
     assert out["count"] == 2
     assert out["total_bytes"] == 1500
     titles = [it["title"] for it in out["items"]]
     assert titles == ["Heat (1995)", "Salah (2020)"]   # sorted by title
     assert out["items"][0]["audio_languages"] == ["eng", "ara"]
+
+
+def test_flagged_audio_movies_disabled_when_no_languages(tmp_path):
+    from src.web.services import flagged_audio_movies
+    conn = _conn(tmp_path)
+    upsert_media_file(conn, _rec("/share/Movies/Heat (1995)/Heat (1995).mkv",
+                                 item_type="movie", file_size_bytes=1000,
+                                 audio_languages='["eng", "ara"]'))
+    out = flagged_audio_movies(conn, [], "02-ArabicReady")
+    assert out == {"items": [], "count": 0, "total_bytes": 0}
+
+
+def test_flagged_audio_movies_configurable_language(tmp_path):
+    from src.web.services import flagged_audio_movies
+    conn = _conn(tmp_path)
+    upsert_media_file(conn, _rec("/share/Movies/Amelie (2001)/Amelie (2001).mkv",
+                                 item_type="movie", file_size_bytes=800,
+                                 audio_languages='["fre"]'))
+    upsert_media_file(conn, _rec("/share/Movies/Heat (1995)/Heat (1995).mkv",
+                                 item_type="movie", audio_languages='["ara"]'))
+    out = flagged_audio_movies(conn, ["fre"], "02-FrenchReady")
+    assert out["count"] == 1
+    assert out["items"][0]["title"] == "Amelie (2001)"
 
 
 def test_mismatched_videos_groups_by_folder(tmp_path):

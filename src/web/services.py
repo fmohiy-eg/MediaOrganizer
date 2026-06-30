@@ -201,12 +201,13 @@ def unmatched_list(conn):
     return [dict(r) for r in rows]
 
 
-_ARABIC_SUBDIR = "02-ArabicReady"
-
-
-def arabic_audio_movies(conn):
-    """Movies whose audio_languages contains a tagged Arabic track (ara/ar),
-    excluding TV, not-yet-probed files, and anything already under 02-ArabicReady."""
+def flagged_audio_movies(conn, languages, staging_subdir):
+    """Movies whose audio_languages intersects the configured `languages` (case-
+    insensitive), excluding TV, not-yet-probed files, and anything already under
+    `staging_subdir`. Returns an empty result when `languages` is empty (feature off)."""
+    wanted = {str(l).lower() for l in (languages or [])}
+    if not wanted:
+        return {"items": [], "count": 0, "total_bytes": 0}
     rows = conn.execute(
         "SELECT filepath, file_size_bytes, audio_languages, audio_profile, duration_ms "
         "FROM media_files WHERE audio_languages IS NOT NULL").fetchall()
@@ -214,12 +215,12 @@ def arabic_audio_movies(conn):
     for r in rows:
         fp = r["filepath"]
         segments = fp.replace("\\", "/").split("/")
-        if _ARABIC_SUBDIR in segments:
+        if staging_subdir and staging_subdir in segments:
             continue
         if parse_path(fp)["item_type"] != "movie":
             continue
         langs = json.loads(r["audio_languages"] or "[]")
-        if not any(str(l).lower() in ("ara", "ar") for l in langs):
+        if not any(str(l).lower() in wanted for l in langs):
             continue
         items.append({
             "filepath": fp,

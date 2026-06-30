@@ -26,12 +26,12 @@ from src.repository import delete_media_by_path, get_media_row, all_media_paths
 from src.parsing import parse_path
 from src.web.services import (library_kpis, variant_conflicts, unmatched_list,
                               english_subtitle_deficits, english_subtitle_deficit_count,
-                              missing_episodes, legacy_duplicates, arabic_audio_movies,
+                              missing_episodes, legacy_duplicates, flagged_audio_movies,
                               mismatched_videos, admin_status, probe_targets)
 from src.web.sync import find_missing
 from src.web.subtitle_fetch import fetch_and_ingest, to_local_path, to_nas_path
 from src.web.inspect import format_duration, assess_versions, title_mismatch
-from src.web.relocate import pick_roots, build_target, relocate_file, arabic_target
+from src.web.relocate import pick_roots, build_target, relocate_file, flagged_target
 from src.web import organize as organize_mod
 from src.repository import update_media_path, upsert_media_file
 from src.opensubtitles_client import OpenSubtitlesClient
@@ -76,7 +76,7 @@ class RelocateBody(BaseModel):
     confirm: bool = False
 
 
-class ArabicBody(BaseModel):
+class FlagBody(BaseModel):
     filepath: str
     confirm: bool = False
 
@@ -144,13 +144,18 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
                exists_fn=os.path.exists, build_id=None,
                probe_json_fn=probe_raw_json, walk_fn=_walk_files,
                getsize_fn=os.path.getsize, scandir_fn=_scandir, rmdir_fn=os.rmdir,
-               spawn_probe_fn=_spawn_probe):
+               spawn_probe_fn=_spawn_probe, audio_flag=None):
     app = FastAPI(title="NAS Media Organizer")
     build_id = build_id or "dev"
     path_map = path_map or {}
     media_paths = media_paths or []
     if player_fn is None:
         player_fn = lambda p: launch_player(p, player_binary)
+    audio_flag = audio_flag or {}
+    flag_langs = audio_flag.get("languages") or []
+    flag_label = audio_flag.get("label") or "Flagged Audio"
+    flag_subdir = audio_flag.get("staging_subdir") or "02-Ready"
+    flag_enabled = bool(flag_langs)
     client = os_client or OpenSubtitlesClient(os_api_key)
     tmdb = tmdb_client or TmdbClient(tmdb_api_key)
     tvdb = tvdb_client or TvdbClient(tvdb_api_key)
@@ -181,8 +186,15 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
             "duplicate_reclaimable_bytes": sum(g["reclaimable_bytes"] for g in groups),
             "subtitle_deficits": english_subtitle_deficit_count(c),
             "unmatched": len(unmatched_list(c)),
-            "arabic_movies": arabic_audio_movies(c)["count"],
+            "flagged_movies": flagged_audio_movies(c, flag_langs, flag_subdir)["count"],
+            "flagged_label": flag_label,
         }
+
+    @app.get("/api/config")
+    def ui_config():
+        """Feature flags the frontend needs to self-configure (labels, visibility)."""
+        return {"audio_flag": {"enabled": flag_enabled, "label": flag_label,
+                               "staging_subdir": flag_subdir}}
 
     @app.get("/api/variants")
     def variants():
@@ -304,33 +316,31 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
         update_media_path(c, body.filepath, dest, metadata_id=body.details.get("metadata_id"))
         return {"moved": True, "dest": dest}
 
-    # --- Arabic audio ---
-    ARABIC_SUBDIR = "02-ArabicReady"
-
-    def _arabic_dest(filepath):
+    # --- Audio-language flag (configurable; e.g. flag Arabic-audio movies) ---
+    def _flag_dest(filepath):
         movies_root, _ = pick_roots(media_paths)
         if not movies_root:
             raise HTTPException(status_code=400, detail="No movies root configured")
         # SMB root -> NAS so the repointed catalog row stays NAS-style.
         movies_root = to_nas_path(movies_root, path_map)
-        return arabic_target(movies_root, filepath, ARABIC_SUBDIR)
+        return flagged_target(movies_root, filepath, flag_subdir)
 
-    @app.get("/api/arabic")
-    def arabic():
-        return arabic_audio_movies(conn())
+    @app.get("/api/audioflag")
+    def audioflag():
+        return flagged_audio_movies(conn(), flag_langs, flag_subdir)
 
-    @app.post("/api/arabic/preview")
-    def arabic_preview(body: ArabicBody):
+    @app.post("/api/audioflag/preview")
+    def audioflag_preview(body: FlagBody):
         _require_row(conn(), body.filepath)
-        dest = _arabic_dest(body.filepath)
+        dest = _flag_dest(body.filepath)
         return {"src": body.filepath, "dest": dest,
                 "dest_exists": exists_fn(to_local_path(dest, path_map))}
 
-    @app.post("/api/arabic/move")
-    def arabic_move(body: ArabicBody):
+    @app.post("/api/audioflag/move")
+    def audioflag_move(body: FlagBody):
         c = conn()
         _require_row(c, body.filepath)
-        dest = _arabic_dest(body.filepath)
+        dest = _flag_dest(body.filepath)
         if not body.confirm:
             return {"src": body.filepath, "dest": dest, "moved": False}
         _relocate_or_http(body.filepath, dest)

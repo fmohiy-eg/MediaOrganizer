@@ -4,6 +4,10 @@ from src.database import init_db, get_connection
 from src.repository import upsert_media_file, get_media_row
 from web_dashboard import create_app
 
+# Audio-flag config matching the original "Arabic Audio" behaviour, for tests that
+# exercise the (now configurable) flagged-audio feature.
+_AF = {"languages": ["ara", "ar"], "label": "Arabic Audio", "staging_subdir": "02-ArabicReady"}
+
 
 def _setup(tmp_path):
     db = str(tmp_path / "m.db"); init_db(db)
@@ -122,13 +126,15 @@ def test_arabic_move_smb_media_paths_stores_nas_dest(tmp_path):
         db, str(tmp_path / "q"),
         media_paths=[r"\\nas\Movies\01-Ready"],
         path_map={"/share/Movies": r"\\nas\Movies"},
+        audio_flag={"languages": ["ara"], "label": "Arabic Audio",
+                    "staging_subdir": "02-ArabicReady"},
         exists_fn=lambda p: p == smb_src,
         makedirs_fn=lambda d, exist_ok: moved.update({"mkdir": d}),
         move_fn=lambda s, d: moved.update({"move": (s, d)}))
     client = TestClient(app)
     nas_dest = "/share/Movies/01-Ready/02-ArabicReady/Heat (1995)/Heat (1995).mkv"
-    assert client.post("/api/arabic/preview", json={"filepath": src}).json()["dest"] == nas_dest
-    r = client.post("/api/arabic/move", json={"filepath": src, "confirm": True})
+    assert client.post("/api/audioflag/preview", json={"filepath": src}).json()["dest"] == nas_dest
+    r = client.post("/api/audioflag/move", json={"filepath": src, "confirm": True})
     assert r.status_code == 200 and r.json()["dest"] == nas_dest
     assert moved["move"] == (smb_src, smb_dest)
     assert get_media_row(conn, nas_dest) is not None
@@ -552,7 +558,7 @@ def test_bad_login_rejected(tmp_path):
     assert r.status_code == 401
 
 
-def test_arabic_list_and_move(tmp_path):
+def test_audioflag_list_and_move(tmp_path):
     db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
     src = "/share/Movies/01-Ready/Heat (1995)/Heat (1995).mkv"
     upsert_media_file(conn, dict(
@@ -564,30 +570,47 @@ def test_arabic_list_and_move(tmp_path):
     app = create_app(
         db, str(tmp_path / "q"),
         media_paths=["/share/TV Shows/01-Ready", "/share/Movies/01-Ready"],
+        audio_flag=_AF,
         exists_fn=lambda p: p == src,                  # src exists, dest doesn't
         makedirs_fn=lambda d, exist_ok: moved.update({"mkdir": d}),
         move_fn=lambda s, d: moved.update({"move": (s, d)}))
     client = TestClient(app)
     dest = "/share/Movies/01-Ready/02-ArabicReady/Heat (1995)/Heat (1995).mkv"
 
-    lst = client.get("/api/arabic").json()
+    lst = client.get("/api/audioflag").json()
     assert lst["count"] == 1 and lst["items"][0]["filepath"] == src
 
-    pv = client.post("/api/arabic/preview", json={"filepath": src}).json()
+    pv = client.post("/api/audioflag/preview", json={"filepath": src}).json()
     assert pv["dest"] == dest and "move" not in moved
 
-    dr = client.post("/api/arabic/move", json={"filepath": src}).json()
+    dr = client.post("/api/audioflag/move", json={"filepath": src}).json()
     assert dr["moved"] is False and "move" not in moved
 
-    r = client.post("/api/arabic/move", json={"filepath": src, "confirm": True})
+    r = client.post("/api/audioflag/move", json={"filepath": src, "confirm": True})
     assert r.status_code == 200 and r.json()["moved"] is True
     assert moved["move"] == (src, dest)
     assert get_media_row(conn, dest) is not None      # repointed
     assert get_media_row(conn, src) is None
-    assert client.get("/api/arabic").json()["count"] == 0
+    assert client.get("/api/audioflag").json()["count"] == 0
 
 
-def test_arabic_move_refuses_overwrite(tmp_path):
+def test_audioflag_disabled_when_no_languages(tmp_path):
+    db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
+    src = "/share/Movies/01-Ready/Heat (1995)/Heat (1995).mkv"
+    upsert_media_file(conn, dict(
+        filepath=src, filename="Heat (1995).mkv", extension=".mkv",
+        parent_directory="/share/Movies/01-Ready/Heat (1995)",
+        file_size_bytes=10, fast_hash="fh", os_hash="oh",
+        item_type="movie", audio_languages='["ara"]'))
+    # no audio_flag passed => feature disabled
+    client = TestClient(create_app(db, str(tmp_path / "q"),
+                                   media_paths=["/share/Movies/01-Ready"]))
+    assert client.get("/api/audioflag").json()["count"] == 0
+    cfg = client.get("/api/config").json()
+    assert cfg["audio_flag"]["enabled"] is False
+
+
+def test_audioflag_move_refuses_overwrite(tmp_path):
     db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
     src = "/share/Movies/01-Ready/Heat (1995)/Heat (1995).mkv"
     upsert_media_file(conn, dict(
@@ -597,28 +620,38 @@ def test_arabic_move_refuses_overwrite(tmp_path):
         item_type="movie", audio_languages='["ara"]'))
     app = create_app(
         db, str(tmp_path / "q"),
-        media_paths=["/share/Movies/01-Ready"],
+        media_paths=["/share/Movies/01-Ready"], audio_flag=_AF,
         exists_fn=lambda p: True,                       # dest already exists
         makedirs_fn=lambda d, exist_ok: None,
         move_fn=lambda s, d: (_ for _ in ()).throw(AssertionError("must not move")))
     client = TestClient(app)
-    r = client.post("/api/arabic/move", json={"filepath": src, "confirm": True})
+    r = client.post("/api/audioflag/move", json={"filepath": src, "confirm": True})
     assert r.status_code == 409
 
 
-def test_index_has_arabic_tab(tmp_path):
+def test_index_has_audioflag_tab(tmp_path):
     client, _ = _setup(tmp_path)
     html = client.get("/").text
-    assert 'data-tab="arabic"' in html
-    assert "Arabic Audio" in html
-    assert "loadArabic" in html
+    assert 'data-tab="audioflag"' in html
+    assert 'id="tab-audioflag"' in html
+    assert "loadAudioFlag" in html
+    assert "bootstrapConfig" in html
 
 
-def test_dup_rows_have_arabic_move_link(tmp_path):
+def test_config_endpoint_reports_audio_flag(tmp_path):
+    db = str(tmp_path / "m.db"); init_db(db)
+    client = TestClient(create_app(db, str(tmp_path / "q"),
+                                   media_paths=["/share/Movies/01-Ready"], audio_flag=_AF))
+    cfg = client.get("/api/config").json()["audio_flag"]
+    assert cfg == {"enabled": True, "label": "Arabic Audio", "staging_subdir": "02-ArabicReady"}
+
+
+def test_dup_rows_have_audioflag_move_link(tmp_path):
     client, _ = _setup(tmp_path)
     html = client.get("/").text
-    # the per-file "move just this file to the Arabic folder" link lives in the dup card
-    assert "Move just this file to 02-ArabicReady" in html
+    # the per-file "move just this file to the staging folder" link lives in the dup card
+    assert "Move just this file to" in html
+    assert "moveAudioFlag" in html
 
 
 def test_mismatch_endpoint(tmp_path):
@@ -644,7 +677,7 @@ def test_index_has_mismatch_tab(tmp_path):
     assert "mismatchDelete" in html
 
 
-def test_arabic_preview_reports_dest_exists(tmp_path):
+def test_audioflag_preview_reports_dest_exists(tmp_path):
     db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
     src = "/share/Movies/01-Ready/Heat (1995)/Heat (1995).mkv"
     upsert_media_file(conn, dict(filepath=src, filename="Heat (1995).mkv", extension=".mkv",
@@ -652,20 +685,20 @@ def test_arabic_preview_reports_dest_exists(tmp_path):
         fast_hash="h", os_hash="o", item_type="movie", audio_languages='["ara"]'))
     # exists_fn says the destination is already there
     app = create_app(db, str(tmp_path / "q"), media_paths=["/share/Movies/01-Ready"],
-                     exists_fn=lambda p: True)
-    r = TestClient(app).post("/api/arabic/preview", json={"filepath": src}).json()
+                     audio_flag=_AF, exists_fn=lambda p: True)
+    r = TestClient(app).post("/api/audioflag/preview", json={"filepath": src}).json()
     assert r["dest_exists"] is True
     # and when nothing exists at dest
     app2 = create_app(db, str(tmp_path / "q"), media_paths=["/share/Movies/01-Ready"],
-                      exists_fn=lambda p: False)
-    r2 = TestClient(app2).post("/api/arabic/preview", json={"filepath": src}).json()
+                      audio_flag=_AF, exists_fn=lambda p: False)
+    r2 = TestClient(app2).post("/api/audioflag/preview", json={"filepath": src}).json()
     assert r2["dest_exists"] is False
 
 
-def test_arabic_move_uses_preview_for_overwrite_warning(tmp_path):
+def test_audioflag_move_uses_preview_for_overwrite_warning(tmp_path):
     client, _ = _setup(tmp_path)
     html = client.get("/").text
-    assert "/api/arabic/preview" in html      # moveArabic checks the target up front
+    assert "/api/audioflag/preview" in html   # moveAudioFlag checks the target up front
     assert "dest_exists" in html
 
 
