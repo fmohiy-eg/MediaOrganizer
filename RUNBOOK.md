@@ -1,6 +1,8 @@
-# 📖 NAS Media Organizer — User Guide
+# 📖 Media Organizer — User Guide
 
 A friendly, plain-language guide to running and using your media organizer. No coding needed — just copy/paste the commands shown.
+
+> **Which setup are you?** This guide walks through the **NAS + PC split** (scanning on a NAS over SSH, dashboard on a separate PC over SMB). If you're running everything on **one machine** (media on a local/external/mounted drive), you don't need the NAS/SSH/`path_map` steps — run `python setup.py`, then `python scan_live.py config.yaml`, then `python run_dashboard.py config.yaml`, all on the same computer. See **[README.md](README.md)** for the single-machine quick-start, then come back here for what each dashboard tab does (§4 onward). The audio-language tab and staging-folder names below are configurable (`audio_flag` in your config) and off until you enable them.
 
 ---
 
