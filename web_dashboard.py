@@ -527,9 +527,16 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
 
     # --- Mismatched videos (file name != folder name, movies library only) ---
     def _movies_prefix():
+        # NAS+PC split: the catalog is NAS-style, so use the path_map movie key.
         for k, v in path_map.items():
             if "movie" in (k + " " + str(v)).lower():
                 return k
+        # Single-machine (empty/no-movie path_map): the catalog stores the local
+        # media_paths directly, so scope to the movies root. to_nas_path is a no-op
+        # when path_map is empty, keeping the prefix consistent with stored paths.
+        movies_root, _ = pick_roots(media_paths)
+        if movies_root:
+            return to_nas_path(movies_root, path_map)
         return None
 
     @app.get("/api/mismatch")

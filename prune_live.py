@@ -1,9 +1,13 @@
 """Prune catalog rows whose media file no longer exists on disk — the removal half
 of a full sync (scan_live.py adds/updates; this removes vanished files).
 
-Run ON THE NAS, where catalog paths ('/share/...') actually resolve. Running it
-off-NAS would see every '/share/...' path as missing and wipe the whole catalog,
-so it is intentionally NOT wired into the dashboard. NAS-safe: no network deps.
+Run where the catalog paths actually resolve on local disk. In the NAS+PC split that
+means ON THE NAS (catalog is '/share/...'); on a single-machine setup the catalog
+stores the local media_paths, so running it there is correct. Running it on a machine
+where the stored paths DON'T resolve (e.g. the PC in a NAS split, which only reaches
+files over SMB via path_map) would see every path as missing and wipe the whole
+catalog — which is why it is intentionally NOT wired into the dashboard. The dashboard
+Admin "Sync deletions" panel is the path-map-aware equivalent. NAS-safe: no network deps.
 
 Usage:
     python prune_live.py [config.yaml]            # dry-run (default): report only

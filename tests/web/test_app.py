@@ -668,6 +668,22 @@ def test_mismatch_endpoint(tmp_path):
     assert d["groups"][0]["items"][0]["filename"] == "Superman (1978) - CD1.mkv"
 
 
+def test_mismatch_single_machine_empty_path_map(tmp_path):
+    # Single-machine: no path_map; catalog stores local media_paths directly. The
+    # movies prefix must come from media_paths so the Mismatch tab still works.
+    db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
+    P = "/mnt/media/Movies/Superman (1978)"
+    upsert_media_file(conn, dict(filepath=P + "/Superman (1978).mkv", filename="Superman (1978).mkv",
+        extension=".mkv", parent_directory=P, file_size_bytes=100, fast_hash="h", os_hash="o"))
+    upsert_media_file(conn, dict(filepath=P + "/Superman (1978) - CD1.mkv", filename="Superman (1978) - CD1.mkv",
+        extension=".mkv", parent_directory=P, file_size_bytes=10, fast_hash="h", os_hash="o"))
+    app = create_app(db, str(tmp_path / "q"),
+                     media_paths=["/mnt/media/Movies", "/mnt/media/TV Shows"])  # no path_map
+    d = TestClient(app).get("/api/mismatch").json()
+    assert d["group_count"] == 1 and d["file_count"] == 1
+    assert d["groups"][0]["items"][0]["filename"] == "Superman (1978) - CD1.mkv"
+
+
 def test_index_has_mismatch_tab(tmp_path):
     client, _ = _setup(tmp_path)
     html = client.get("/").text
