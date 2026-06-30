@@ -1,21 +1,64 @@
+# Media Organizer configuration.
+# Copy to config.yaml (gitignored) and edit — or just run: python setup.py
+# API keys can live here, but a .env file (see .env.example) is recommended and
+# overrides these. Precedence per key: environment > .env > this file.
+
 # --- Library paths (scanned recursively) ---
+# Point these at your movies and TV folders. The roots are matched by name: one
+# containing "movie" and one containing "tv"/"show". Single-machine: use local or
+# mounted paths (e.g. /mnt/media/Movies, D:/Media/TV Shows). NAS+PC split: use the
+# SMB paths and fill in path_map below.
 media_paths:
-  - /media/Movies
-  - /media/TV Shows
+  - /mnt/media/Movies
+  - /mnt/media/TV Shows
 
-# --- Storage / runtime ---
-database_path: /config/media_audit.db
-log_directory: /logs
-quarantine_path: /config/.quarantine     # single central quarantine
+# --- Storage / runtime (local-friendly defaults) ---
+database_path: ./media_audit.db
+log_directory: ./logs
+quarantine_path: ./quarantine          # single central quarantine ("deleted" files move here)
 
-# --- External API credentials ---
+# --- NAS+PC split only: map stored (NAS) path prefixes to locally-reachable (SMB) ---
+# Leave empty {} for single-machine (paths are used as-is). For a split deployment the
+# catalog stores the NAS-side prefix and the dashboard translates it to SMB for disk ops:
+#   path_map:
+#     "/share/Movies": "\\\\192.168.1.10\\Movies"
+#     "/share/TV Shows": "\\\\192.168.1.10\\TV Shows"
+path_map: {}
+
+# --- External API credentials (prefer .env — see .env.example) ---
 api_keys:
-  tmdb: ""              # TMDB (movies)
-  tvdb: ""              # TVDB v4 (TV + broadcast timeline)
+  tmdb: ""               # TMDB (movies)
+  tvdb: ""               # TVDB v4 (TV)
   opensubtitles:
     api_key: ""
-    username: ""
+    username: ""         # optional; the dashboard can also log in interactively
     password: ""
+
+# --- External tooling (binary "" => auto-detect on PATH, then platform defaults) ---
+ffprobe:
+  binary: ""             # e.g. /usr/bin/ffprobe or C:\tools\ffprobe.exe; "" = auto-detect
+  timeout_seconds: 30
+  retries: 3
+player:
+  binary: ""             # VLC or other; "" = auto-detect VLC, else OS default association
+
+# --- Audio-language flagging (optional) ---
+# List movies whose audio track matches `languages` and offer a one-click move into
+# `staging_subdir`. Leave languages empty [] to hide the feature entirely.
+# Example (flag Arabic-audio movies):
+#   audio_flag:
+#     languages: ["ara", "ar"]
+#     label: "Arabic Audio"
+#     staging_subdir: "02-ArabicReady"
+audio_flag:
+  languages: []
+  label: "Flagged Audio"
+  staging_subdir: "02-Ready"
+
+# --- Staging folder names (your personal workflow; used by the move flows) ---
+staging:
+  ready_subdir: "01-Ready"
+  flagged_subdir: "02-Ready"
 
 # --- Hashing thresholds ---
 hashing:
@@ -30,11 +73,6 @@ audit:
     - bitrate
     - codec        # HEVC/AV1 preferred over H.264
     - audio_channels
-
-# --- External tooling ---
-ffprobe:
-  timeout_seconds: 30
-  retries: 3
 
 # --- API behavior ---
 api:
