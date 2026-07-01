@@ -83,3 +83,7 @@ The codebase is small pure modules under `src/` with external effects (ffprobe, 
 - `web_dashboard.py` — `create_app(...) -> FastAPI`; tabbed dashboard. `run_dashboard.py` serves it.
 - Operational runners: `scan_live.py` (inventory scan), `read_nfo_ids.py` (IDs from `.nfo`), `prune_live.py` (remove rows for deleted files), `gaps_live.py` (cache TVDB episode lists), `probe_dupes.py` (ffprobe runtimes/audio), `match_live.py` (API match fallback).
 - Logic lives in small, independently-tested modules under `src/`. External effects (ffprobe, HTTP, disk) are injected, so the suite runs fully offline.
+
+## License
+
+[MIT](LICENSE) — free to use, modify, and distribute; keep the copyright notice.
