@@ -12,7 +12,8 @@ Runs **on a single machine** (media on a local, external, or mounted drive) or i
 
 - **Catalog** every media file (path, size, name, season/episode, sidecars) — fast inventory pass, no heavy reads.
 - **Identify** titles from Jellyfin/Kodi `.nfo` IDs (free, accurate), with a TMDB/TVDB lookup fallback.
-- **Duplicate triage** — groups same-name copies in a folder, **split into Same length / Diff length** by runtime. Each copy shows **runtime / resolution / codec / embedded subtitles / container internal title** (probed on demand), flags filename-vs-embedded-title mismatches, and warns when copies are *different versions* rather than true duplicates. You can delete **any** copy (the "KEEP?" is just a hint).
+- **Duplicate triage** — groups same-name copies in a folder, **split into Same length / Diff length** by runtime. Each copy shows **runtime / resolution / codec / embedded subtitles / container internal title** (probed on demand), flags filename-vs-embedded-title mismatches, warns when copies are *different versions* rather than true duplicates, and explains **why** the suggested keeper won. You can delete **any** copy (the "KEEP?" is just a hint).
+- **Quality Variants** — finds the **same movie stored at different quality across different folders** (e.g. a 720p copy alongside a 1080p) — the cross-folder redundancy the per-folder Duplicates tab can't see. Ranks by resolution → bitrate → codec → audio and marks the keeper.
 - **Cleanup** — one-click quarantine of legacy-format files that already have a modern copy.
 - **Missing episodes** — diffs each show's full TVDB episode list against what's on disk (specials excluded).
 - **Subtitles** — checks for embedded English tracks, and fetches/unzips/cleans/renames external subs from OpenSubtitles (session-only login, daily-quota aware).
