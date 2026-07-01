@@ -24,6 +24,10 @@ server:
   host: 0.0.0.0
   port: 8081
 
+# Optional label shown in the dashboard header + browser tab, to tell instances apart
+# when running several side by side. Leave empty for none.
+instance_name: ""
+
 # --- NAS+PC split only: map stored (NAS) path prefixes to locally-reachable (SMB) ---
 # Leave empty {} for single-machine (paths are used as-is). For a split deployment the
 # catalog stores the NAS-side prefix and the dashboard translates it to SMB for disk ops:

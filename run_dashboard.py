@@ -62,6 +62,7 @@ def main(config_path="config.yaml", host=None, port=None):
         player_binary=resolve_player(config.get("player", {}).get("binary", "")),
         audio_flag=config.get("audio_flag", {}),
         variant_priority=config["audit"]["variant_priority"],
+        instance_name=config.get("instance_name", ""),
         build_id=_build_id())
     print(f"Dashboard: http://{host}:{port}  (db={config['database_path']})")
     uvicorn.run(app, host=host, port=port)

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 from datetime import date, datetime
+from html import escape as _html_escape
 
 
 def _spawn_probe():
@@ -152,7 +153,8 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
                exists_fn=os.path.exists, build_id=None,
                probe_json_fn=probe_raw_json, walk_fn=_walk_files,
                getsize_fn=os.path.getsize, scandir_fn=_scandir, rmdir_fn=os.rmdir,
-               spawn_probe_fn=_spawn_probe, audio_flag=None, variant_priority=None):
+               spawn_probe_fn=_spawn_probe, audio_flag=None, variant_priority=None,
+               instance_name=""):
     app = FastAPI(title="NAS Media Organizer")
     build_id = build_id or "dev"
     path_map = path_map or {}
@@ -174,12 +176,20 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
     def conn():
         return get_connection(db_path)
 
+    name = (instance_name or "").strip()
+    _title_suffix = f" · {_html_escape(name)}" if name else ""
+    _instance_badge = (
+        f' <span class="text-sm font-normal align-middle bg-amber-100 text-amber-800 '
+        f'rounded px-2 py-0.5">{_html_escape(name)}</span>' if name else "")
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         # No-store so the browser never serves a stale copy of the UI after an update.
         # The build stamp lets the user confirm a *server* restart took effect too
         # (uvicorn loads the app once; editing files alone won't reload a running server).
-        html = _INDEX_HTML.replace("__BUILD_ID__", build_id)
+        html = (_INDEX_HTML.replace("__BUILD_ID__", build_id)
+                .replace("__TITLE_SUFFIX__", _title_suffix)
+                .replace("__INSTANCE_BADGE__", _instance_badge))
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/kpis")

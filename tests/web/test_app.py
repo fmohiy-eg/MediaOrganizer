@@ -48,6 +48,23 @@ def test_quality_variants_endpoint_and_tab(tmp_path):
     assert 'data-tab="quality"' in html and "loadQuality" in html
 
 
+def test_default_title_has_no_nas_and_no_instance_badge(tmp_path):
+    client, _ = _setup(tmp_path)
+    html = client.get("/").text
+    assert "<title>Media Organizer</title>" in html
+    assert "NAS Media Organizer" not in html
+    assert "__INSTANCE_BADGE__" not in html and "__TITLE_SUFFIX__" not in html
+
+
+def test_instance_name_shown_in_header_and_title_escaped(tmp_path):
+    db = str(tmp_path / "m.db"); init_db(db)
+    client = TestClient(create_app(db, str(tmp_path / "q"), instance_name="Fork <test>"))
+    html = client.get("/").text
+    # appears escaped in BOTH the browser title suffix and the header badge
+    assert html.count("Fork &lt;test&gt;") >= 2
+    assert "Fork <test>" not in html                     # never injected raw
+
+
 def test_relocate_preview_clear_error_when_root_name_unrecognized(tmp_path):
     # Folders not named Movies/TV -> pick_roots can't identify them; Fix must return
     # a clear 400, not a 500 crash.

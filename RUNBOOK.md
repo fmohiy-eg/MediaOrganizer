@@ -41,7 +41,7 @@ cd path\to\MediaOrganizer
 python run_dashboard.py config.yaml
 ```
 
-Then open your browser to **http://localhost:8080**. To stop it later: click in that terminal window and press **Ctrl+C**.
+Then open your browser to **http://localhost:8081** (the port comes from `server.port` in your config). To stop it later: click in that terminal window and press **Ctrl+C**.
 
 ---
 

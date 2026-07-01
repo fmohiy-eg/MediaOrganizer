@@ -41,6 +41,9 @@ DEFAULTS = {
     # Web dashboard bind address. Change `port` to run more than one instance at once
     # (e.g. this app next to another copy on 8080). A CLI arg overrides this.
     "server": {"host": "0.0.0.0", "port": 8081},
+    # Optional label shown in the dashboard header + browser tab, to tell instances apart
+    # when running several side by side (e.g. "Test", "Fork"). Empty = no label.
+    "instance_name": "",
     # Audio-language flagging: list movies whose audio track is in `languages` and
     # offer a one-click move into `staging_subdir`. languages=[] => feature hidden.
     "audio_flag": {"languages": [], "label": "Flagged Audio", "staging_subdir": "02-Ready"},
