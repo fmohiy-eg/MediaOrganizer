@@ -17,6 +17,13 @@ database_path: ./media_audit.db
 log_directory: ./logs
 quarantine_path: ./quarantine          # single central quarantine ("deleted" files move here)
 
+# --- Web dashboard bind address ---
+# Change `port` to run more than one instance at once (e.g. this app alongside another
+# copy on 8080). A CLI port arg overrides this: python run_dashboard.py config.yaml 8082
+server:
+  host: 0.0.0.0
+  port: 8081
+
 # --- NAS+PC split only: map stored (NAS) path prefixes to locally-reachable (SMB) ---
 # Leave empty {} for single-machine (paths are used as-is). For a split deployment the
 # catalog stores the NAS-side prefix and the dashboard translates it to SMB for disk ops:

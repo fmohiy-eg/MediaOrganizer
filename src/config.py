@@ -38,6 +38,9 @@ DEFAULTS = {
         ],
     },
     "safety": {"dry_run_default": True},
+    # Web dashboard bind address. Change `port` to run more than one instance at once
+    # (e.g. this app next to another copy on 8080). A CLI arg overrides this.
+    "server": {"host": "0.0.0.0", "port": 8081},
     # Audio-language flagging: list movies whose audio track is in `languages` and
     # offer a one-click move into `staging_subdir`. languages=[] => feature hidden.
     "audio_flag": {"languages": [], "label": "Flagged Audio", "staging_subdir": "02-Ready"},

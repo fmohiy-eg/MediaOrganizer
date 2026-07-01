@@ -65,9 +65,11 @@ Prefer to edit by hand? `cp config.example.yaml config.yaml` and edit it. API ke
 
 ```bash
 python scan_live.py config.yaml       # build/refresh the catalog
-python run_dashboard.py config.yaml   # dashboard at http://localhost:8080
+python run_dashboard.py config.yaml   # dashboard at http://localhost:8081
 python cli_engine.py config.yaml      # CLI engine (task menu)
 ```
+
+The dashboard port comes from `server.port` in your config (default **8081**); a CLI arg overrides it (`python run_dashboard.py config.yaml 8082`). Set a distinct port + its own `database_path`/`quarantine_path`/`log_directory` to run several instances side by side.
 
 ## Contributing / running the tests
 
