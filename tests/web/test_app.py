@@ -30,6 +30,21 @@ def test_search_params_unmatched_movie_uses_query_year_and_movie_type():
     assert "tmdb_id" not in p
 
 
+def test_relocate_preview_clear_error_when_root_name_unrecognized(tmp_path):
+    # Folders not named Movies/TV -> pick_roots can't identify them; Fix must return
+    # a clear 400, not a 500 crash.
+    db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
+    src = "/lib/Films/Heat (1995)/Heat (1995).mkv"
+    upsert_media_file(conn, dict(filepath=src, filename="Heat (1995).mkv", extension=".mkv",
+        parent_directory="/lib/Films/Heat (1995)", file_size_bytes=10, fast_hash="h",
+        os_hash="o", item_type="movie"))
+    app = create_app(db, str(tmp_path / "q"), media_paths=["/lib/Films", "/lib/Series"])
+    r = TestClient(app).post("/api/relocate/preview",
+        json={"filepath": src, "kind": "movie", "details": {"title": "Heat", "year": 1995}})
+    assert r.status_code == 400
+    assert "Movies" in r.json()["detail"]
+
+
 def _setup(tmp_path):
     db = str(tmp_path / "m.db"); init_db(db)
     conn = get_connection(db)

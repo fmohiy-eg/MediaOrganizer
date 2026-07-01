@@ -12,6 +12,7 @@ import sys
 import yaml
 
 from src.toolpaths import resolve_ffprobe, resolve_player
+from src.web.relocate import pick_roots
 
 
 def build_config_dict(answers):
@@ -77,6 +78,16 @@ def run_wizard(input_fn=input, exists_fn=os.path.isdir, isfile_fn=os.path.isfile
         if path and not exists_fn(path):
             out(f"  ! {label} folder not found (continuing anyway): {path}")
     media_paths = [p for p in (movies, tv) if p]
+
+    # The app tells movies from TV by matching 'movie' / 'tv'/'show' in the path. Warn
+    # now if the chosen names won't be recognized (Fix/relocate/audio-flag need this).
+    got_movies, got_tv = pick_roots(media_paths)
+    if movies and not got_movies:
+        out("  ! Heads up: your Movies folder name has no 'movie' in it, so the Fix and "
+            "relocate features may not recognize it. Consider a name like 'Movies'.")
+    if tv and not got_tv:
+        out("  ! Heads up: your TV folder name has no 'tv'/'show' in it, so the Fix and "
+            "relocate features may not recognize it. Consider a name like 'TV Shows'.")
 
     path_map = {}
     if split:

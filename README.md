@@ -53,21 +53,29 @@ cp .env.example .env                 # (optional) put your API keys here
 
 Prefer to edit by hand? `cp config.example.yaml config.yaml` and edit it. API keys go in `.env` (recommended) or `config.yaml`; precedence is **environment > .env > config.yaml**. Both `config.yaml` and `.env` are gitignored.
 
+> ⚠️ **Name your folders so the app can tell Movies from TV.** The app identifies your libraries by matching the words **`movie`** and **`tv`** (or **`show`**) in the `media_paths`. Folders like `Movies` and `TV Shows` work out of the box; folders named `Films` / `Series` won't be recognized, and the **Fix**, relocate, and audio-flag features will report "no library root configured." The setup wizard warns you if your names won't match.
+
 ### Single-machine vs NAS+PC split
 
 - **Single machine (default):** point `media_paths` at your local/mounted folders and leave `path_map: {}`. Everything runs in one place.
 - **NAS + PC split:** scan on the NAS (`scan_live.py`), run the dashboard on a PC, and set `path_map` so the catalog's NAS paths translate to SMB for disk operations. See [RUNBOOK.md](RUNBOOK.md) §2.
 
-The Movies/TV roots are matched by name — one path containing "movie", one containing "tv"/"show".
-
 ## Run
 
 ```bash
-python -m pytest -q                   # test suite
 python scan_live.py config.yaml       # build/refresh the catalog
 python run_dashboard.py config.yaml   # dashboard at http://localhost:8080
 python cli_engine.py config.yaml      # CLI engine (task menu)
 ```
+
+## Contributing / running the tests
+
+```bash
+pip install -r requirements-dev.txt   # runtime + test deps
+python -m pytest -q                    # ~281 tests, fully offline
+```
+
+The codebase is small pure modules under `src/` with external effects (ffprobe, HTTP, disk) injected, so the whole suite runs without a network, a real library, or ffprobe installed.
 
 ## Architecture (two entry points over a shared SQLite catalog)
 

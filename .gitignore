@@ -12,5 +12,5 @@ tools/
 # Personal library path dumps (parser validation fixtures) — never publish
 tv.txt
 movies.txt
-# Local Claude Code permission config (machine-specific paths)
-.claude/settings.local.json
+# Local Claude Code tooling config (machine-specific)
+.claude/

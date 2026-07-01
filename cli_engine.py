@@ -23,7 +23,7 @@ from src.web.services import library_kpis
 
 MENU = """
 ==================================================
-        NAS Media Organizer & Audit Engine
+          Media Organizer & Audit Engine
 ==================================================
  [1] Scan File System & Index Media (Update DB)
  [2] Match Metadata via Online APIs (TMDB/TVDB)

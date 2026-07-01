@@ -301,6 +301,14 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
         # media_paths may be SMB (PC config); reverse-map roots to NAS so the
         # destination — and the repointed catalog row — stays NAS-style.
         movies_root, tv_root = pick_roots(media_paths)
+        needed = "movies" if body.kind == "movie" else "TV"
+        root = movies_root if body.kind == "movie" else tv_root
+        if not root:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No {needed} library root configured. Name one of your "
+                       "media_paths with 'Movies' and one with 'TV' (or 'Shows') so "
+                       "the app can tell them apart.")
         movies_root = to_nas_path(movies_root, path_map) if movies_root else movies_root
         tv_root = to_nas_path(tv_root, path_map) if tv_root else tv_root
         return build_target(body.filepath, body.kind, body.details, movies_root, tv_root)

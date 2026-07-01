@@ -55,11 +55,6 @@ audio_flag:
   label: "Flagged Audio"
   staging_subdir: "02-Ready"
 
-# --- Staging folder names (your personal workflow; used by the move flows) ---
-staging:
-  ready_subdir: "01-Ready"
-  flagged_subdir: "02-Ready"
-
 # --- Hashing thresholds ---
 hashing:
   partial_hash_threshold_bytes: 20000000   # files larger than this use head/tail partial hashing

@@ -41,8 +41,6 @@ DEFAULTS = {
     # Audio-language flagging: list movies whose audio track is in `languages` and
     # offer a one-click move into `staging_subdir`. languages=[] => feature hidden.
     "audio_flag": {"languages": [], "label": "Flagged Audio", "staging_subdir": "02-Ready"},
-    # Generalized staging-folder names (your personal "01-Ready"/"02-ArabicReady" workflow).
-    "staging": {"ready_subdir": "01-Ready", "flagged_subdir": "02-Ready"},
     # Maps stored (NAS) path prefixes to locally-accessible (SMB) prefixes for the
     # dashboard running off-NAS. Empty = paths used as-is (dashboard runs on the NAS).
     "path_map": {},
