@@ -44,6 +44,24 @@ def test_execute_plan_uses_to_local_and_requires_video(tmp_path):
         execute_plan(plan2, str(q), dry_run=False, to_local=lambda p: "/nope/missing.mkv")
 
 
+def test_quarantine_never_overwrites_an_already_parked_file(tmp_path):
+    # Deleting two different files that map to the same quarantine dest (e.g. a file
+    # re-added after a prior delete) must NOT clobber the earlier quarantined copy.
+    q = tmp_path / "q"
+    first = tmp_path / "v.mkv"; first.write_bytes(b"AAAA")
+    plan1 = {"video": str(first), "cascade": [], "preserved": []}
+    dest1 = execute_plan(plan1, str(q), dry_run=False)[0][1]
+
+    second = tmp_path / "v.mkv"; second.write_bytes(b"BBBB")   # same name -> same dest
+    plan2 = {"video": str(second), "cascade": [], "preserved": []}
+    dest2 = execute_plan(plan2, str(q), dry_run=False)[0][1]
+
+    assert dest1 != dest2                       # second got a non-colliding name
+    assert os.path.exists(dest1) and os.path.exists(dest2)
+    with open(dest1, "rb") as f:
+        assert f.read() == b"AAAA"              # original copy intact, not overwritten
+
+
 def test_execute_plan_skips_missing_sidecar_but_moves_video(tmp_path):
     real = tmp_path / "v.mkv"; real.write_bytes(b"x")
     q = tmp_path / "q"

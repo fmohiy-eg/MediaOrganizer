@@ -8,6 +8,18 @@ def _dest_for(source, quarantine_path):
     return os.path.join(quarantine_path, rest)
 
 
+def _noncolliding(dest, exists_fn=os.path.exists):
+    """Return `dest`, or `dest.1`/`dest.2`/... (suffix before the extension) if it is
+    already taken, so a quarantine move never overwrites a previously parked file."""
+    if not exists_fn(dest):
+        return dest
+    stem, ext = os.path.splitext(dest)
+    n = 1
+    while exists_fn(f"{stem}.{n}{ext}"):
+        n += 1
+    return f"{stem}.{n}{ext}"
+
+
 def plan_moves(plan, quarantine_path):
     sources = [plan["video"]] + list(plan.get("cascade", []))
     return [(s, _dest_for(s, quarantine_path)) for s in sources]
@@ -39,6 +51,7 @@ def execute_plan(plan, quarantine_path, dry_run=True, to_local=None):
         if not os.path.exists(local_src):
             continue  # a sidecar already gone — skip, don't fail the whole delete
         os.makedirs(os.path.dirname(dest), exist_ok=True)
+        dest = _noncolliding(dest)   # never overwrite an already-parked file
         shutil.move(local_src, dest)
         moved.append((source, dest))
     return moved
