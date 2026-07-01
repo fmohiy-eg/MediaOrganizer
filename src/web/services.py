@@ -55,6 +55,30 @@ def _keeper_rank(item):
     return (modern, item.get("resolution_height") or 0, item["file_size_bytes"])
 
 
+def _human_size(b):
+    b = b or 0
+    return f"{b / 1e9:.2f} GB" if b >= 1e9 else f"{b / 1e6:.0f} MB"
+
+
+def _keeper_reason(items):
+    """One-line 'why the keeper won' comparing the keeper (items[0], already sorted
+    keeper-first) to the top runner-up on the same axes _keeper_rank uses."""
+    keeper, runner = items[0], items[1]
+    bits = []
+    k_ext = keeper["extension"].lstrip(".").lower()
+    r_ext = runner["extension"].lstrip(".").lower()
+    if keeper["extension"].lower() not in _LEGACY_EXTS and runner["extension"].lower() in _LEGACY_EXTS:
+        bits.append(f"modern format (.{k_ext} vs .{r_ext})")
+    kh, rh = keeper.get("resolution_height") or 0, runner.get("resolution_height") or 0
+    if kh and rh and kh != rh:
+        bits.append(f"{kh}p vs {rh}p")
+    if keeper["file_size_bytes"] != runner["file_size_bytes"]:
+        bits.append(f"{_human_size(keeper['file_size_bytes'])} vs {_human_size(runner['file_size_bytes'])}")
+    if not bits:
+        return "Copies look equivalent — keep whichever you prefer."
+    return "Suggested keeper: " + "; ".join(bits) + "."
+
+
 def _variant_key(filepath):
     """A true redundant-copy group = same folder + same base name, different extension
     (e.g. Movie.avi / Movie.mp4 / Movie.rm). This excludes multi-part files (CD1/CD2),
@@ -109,6 +133,7 @@ def variant_conflicts(conn, deviation_seconds=120):
         kind = "tv" if parse_path(items[0]["filepath"])["item_type"] == "episode" else "movie"
         out.append({"metadata_id": mid, "title": label, "items": items,
                     "reclaimable_bytes": reclaimable, "kind": kind,
+                    "keeper_reason": _keeper_reason(items),
                     "runtime_class": _runtime_class(items, deviation_seconds)})
     out.sort(key=lambda g: g["reclaimable_bytes"], reverse=True)
     return out

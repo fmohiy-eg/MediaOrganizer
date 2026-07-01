@@ -178,6 +178,30 @@ def test_english_subtitle_deficits(tmp_path):
     assert deficits == ["/d/NoSub.mkv"]
 
 
+def test_variant_conflicts_explains_keeper_choice(tmp_path):
+    conn = _conn(tmp_path)
+    # .wmv is a legacy format; .mkv is modern -> the reason should call that out,
+    # plus the resolution and size comparison the ranking used.
+    upsert_media_file(conn, _rec("/d/Heat.mkv", extension=".mkv",
+                                 size=2_000_000_000, resolution_height=1080))
+    upsert_media_file(conn, _rec("/d/Heat.wmv", extension=".wmv",
+                                 size=700_000_000, resolution_height=720))
+    g = variant_conflicts(conn)[0]
+    assert g["items"][0]["extension"] == ".mkv"          # keeper sorted first
+    reason = g["keeper_reason"]
+    assert "modern format (.mkv vs .wmv)" in reason
+    assert "1080p vs 720p" in reason
+    assert "2.00 GB vs 700 MB" in reason
+
+
+def test_variant_conflicts_keeper_reason_falls_back_when_equivalent(tmp_path):
+    conn = _conn(tmp_path)  # same modern format, same resolution, same size
+    upsert_media_file(conn, _rec("/d/A.mkv", extension=".mkv", size=1000, resolution_height=1080))
+    upsert_media_file(conn, _rec("/d/A.mp4", extension=".mp4", size=1000, resolution_height=1080))
+    reason = variant_conflicts(conn)[0]["keeper_reason"]
+    assert "equivalent" in reason.lower()
+
+
 def test_deficit_excludes_files_with_embedded_english_subtitle(tmp_path):
     from src.web.services import english_subtitle_deficits, english_subtitle_deficit_count
     conn = _conn(tmp_path)
