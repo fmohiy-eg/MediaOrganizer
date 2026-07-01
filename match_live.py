@@ -12,7 +12,7 @@ import collections
 import sys
 import time
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import get_connection
 from src.parsing import parse_path
 from src.matcher import decide_match
@@ -41,7 +41,7 @@ def _search_with_retry(provider, parsed, retries=2):
 
 
 def main(config_path="config.yaml", limit=None):
-    cfg = load_config(config_path)
+    cfg = load_config_or_exit(config_path)
     conn = get_connection(cfg["database_path"])
     keys = cfg["api_keys"]
     tmdb = TmdbClient(keys["tmdb"])

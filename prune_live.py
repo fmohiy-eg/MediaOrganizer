@@ -19,7 +19,7 @@ import os
 import sys
 import time
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import get_connection, db_write_lock
 from src.repository import all_media_paths
 
@@ -48,7 +48,7 @@ def delete_rows(conn, paths):
 
 
 def main(config_path="config.yaml", apply=False):
-    cfg = load_config(config_path)
+    cfg = load_config_or_exit(config_path)
     conn = get_connection(cfg["database_path"])
     start = time.time()
     print("Checking catalog rows against disk...", flush=True)

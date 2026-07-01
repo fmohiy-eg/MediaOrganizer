@@ -12,7 +12,7 @@ from datetime import datetime
 
 import uvicorn
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import init_db
 from src.toolpaths import resolve_ffprobe, resolve_player, ffprobe_is_available
 from web_dashboard import create_app
@@ -31,7 +31,7 @@ def _build_id():
 
 
 def main(config_path="config.yaml", host="0.0.0.0", port=8080):
-    config = load_config(config_path)
+    config = load_config_or_exit(config_path)
     init_db(config["database_path"])
     ffprobe_binary = resolve_ffprobe(config["ffprobe"].get("binary", ""))
     if not ffprobe_is_available(ffprobe_binary):

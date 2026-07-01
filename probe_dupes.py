@@ -12,7 +12,7 @@ Only files without a stored runtime are touched, so it resumes safely after a st
 import sys
 import time
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import get_connection
 from src.repository import update_stream_fields
 from src.toolpaths import resolve_ffprobe, ffprobe_is_available
@@ -22,7 +22,7 @@ from src.probe import probe_streams
 
 
 def main(config_path="config.yaml", limit=None):
-    cfg = load_config(config_path)
+    cfg = load_config_or_exit(config_path)
     conn = get_connection(cfg["database_path"])
     pm = cfg.get("path_map", {})
     binary = resolve_ffprobe(cfg["ffprobe"].get("binary", ""))

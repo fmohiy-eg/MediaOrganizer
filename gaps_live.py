@@ -11,7 +11,7 @@ import json
 import sys
 import time
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import get_connection
 from src.parsing import parse_path
 from src.metadata_client import TvdbClient
@@ -27,7 +27,7 @@ def _series_title(conn, sid):
 
 
 def main(config_path="config.yaml", limit=None):
-    cfg = load_config(config_path)
+    cfg = load_config_or_exit(config_path)
     conn = get_connection(cfg["database_path"])
     tvdb = TvdbClient(cfg["api_keys"]["tvdb"])
 

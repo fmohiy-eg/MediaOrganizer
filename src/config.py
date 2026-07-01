@@ -79,3 +79,15 @@ def load_config(path):
     if not merged["media_paths"]:
         raise ConfigError("config.media_paths must contain at least one path")
     return merged
+
+
+def load_config_or_exit(path):
+    """load_config, but on a config problem print the friendly message and exit non-zero
+    instead of dumping a traceback. Used by the runner scripts so a missing/typo'd config
+    (the most common first-run mistake) fails cleanly."""
+    import sys
+    try:
+        return load_config(path)
+    except ConfigError as e:
+        print(f"Config error: {e}\nCreate one with: python setup_wizard.py")
+        sys.exit(1)

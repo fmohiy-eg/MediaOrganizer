@@ -27,6 +27,19 @@ def test_empty_media_paths_raises(tmp_path):
         load_config(cfg_path)
 
 
+def test_load_config_or_exit_exits_cleanly_on_bad_config(tmp_path):
+    from src.config import load_config_or_exit
+    with pytest.raises(SystemExit) as e:                       # not a raw traceback
+        load_config_or_exit(str(tmp_path / "nope.yaml"))
+    assert e.value.code == 1
+
+
+def test_load_config_or_exit_returns_on_good_config(tmp_path):
+    from src.config import load_config_or_exit
+    cfg_path = _write(tmp_path, "media_paths:\n  - /media/Movies\n")
+    assert load_config_or_exit(cfg_path)["media_paths"] == ["/media/Movies"]
+
+
 def test_env_var_overlays_blank_yaml_api_key(tmp_path, monkeypatch):
     monkeypatch.setenv("TMDB_API_KEY", "from_env")
     cfg_path = _write(tmp_path, "media_paths:\n  - /media/Movies\n")  # blank tmdb key

@@ -11,7 +11,7 @@ import collections
 import os
 import sys
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import get_connection, db_write_lock
 from src.parsing import parse_path
 from src.nfo import extract_ids
@@ -35,7 +35,7 @@ def _series_folder(path):
 
 
 def main(config_path="config.yaml"):
-    cfg = load_config(config_path)
+    cfg = load_config_or_exit(config_path)
     conn = get_connection(cfg["database_path"])
     paths = all_media_paths(conn)
     total = len(paths)

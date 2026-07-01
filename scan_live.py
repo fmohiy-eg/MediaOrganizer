@@ -13,14 +13,14 @@ import os
 import sys
 import time
 
-from src.config import load_config
+from src.config import load_config_or_exit
 from src.database import init_db, get_connection
 from src.scanner import discover
 from src.indexer import scan_and_index
 
 
 def main(config_path="config.yaml"):
-    config = load_config(config_path)
+    config = load_config_or_exit(config_path)
     init_db(config["database_path"])
     conn = get_connection(config["database_path"])
 
