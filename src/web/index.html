@@ -91,7 +91,7 @@
       <button onclick="subLogin()" class="bg-slate-800 text-white rounded px-3 py-1">Log in</button>
       <span id="loginmsg" class="text-slate-500"></span>
     </div>
-    <p class="text-xs text-amber-600 mb-2">Note: this lists files with no external English .srt. Embedded subs inside .mkv aren't visible without ffprobe.</p>
+    <p class="text-xs text-slate-500 mb-2">Files with an external English <code>.srt</code> — or a probed embedded English track — are excluded. Files not yet probed still appear; run the probe (Admin tab) so those that already carry English subs drop off automatically.</p>
     <div id="deficits" class="space-y-1 text-sm"></div>
     <div class="flex gap-2 mt-3">
       <button onclick="defPrev()" class="px-3 py-1 rounded border text-sm">&larr; Prev</button>

@@ -114,11 +114,18 @@ def variant_conflicts(conn, deviation_seconds=120):
     return out
 
 
+# A file is a subtitle "deficit" only if it has NEITHER an external English sidecar NOR
+# an embedded English subtitle track. has_embedded_english_subtitle is NULL until the
+# file is probed, so NULL/'no'/'unknown' still count as a deficit (we don't hide real
+# gaps); only a confirmed 'yes' embedded track clears it. This stops the list (and the
+# OpenSubtitles quota) from being wasted on files that already carry English subs.
 _NO_ENG_SUB = (
     "NOT EXISTS (SELECT 1 FROM sidecar_assets s WHERE s.media_file_id = m.id "
     "AND s.asset_type = 'subtitle' AND ("
     "  lower(s.asset_path) LIKE '%.eng.%' OR lower(s.asset_path) LIKE '%.en.%' "
-    "  OR lower(s.asset_path) LIKE '%english%'))")
+    "  OR lower(s.asset_path) LIKE '%english%')) "
+    "AND (m.has_embedded_english_subtitle IS NULL "
+    "     OR m.has_embedded_english_subtitle != 'yes')")
 
 
 def english_subtitle_deficit_count(conn):

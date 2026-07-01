@@ -47,10 +47,15 @@ def test_update_stream_fields(tmp_path):
     upsert_media_file(conn, _rec("/m/v.mkv"))
     update_stream_fields(conn, "/m/v.mkv",
                          {"duration_ms": 5400000, "resolution_height": 1080,
-                          "video_codec": "hevc", "subtitle_languages": "ignored"})
+                          "video_codec": "hevc",
+                          "subtitle_languages": '["eng", "spa"]',
+                          "has_embedded_english_subtitle": "yes"})
     row = get_media_row(conn, "/m/v.mkv")
     assert row["duration_ms"] == 5400000 and row["resolution_height"] == 1080
     assert row["video_codec"] == "hevc"
+    # embedded-subtitle info must now persist (previously silently dropped)
+    assert row["subtitle_languages"] == '["eng", "spa"]'
+    assert row["has_embedded_english_subtitle"] == "yes"
 
 
 def test_update_media_path(tmp_path):

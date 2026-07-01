@@ -37,7 +37,7 @@ def all_media_paths(conn):
 
 _STREAM_COLS = ("duration_ms", "bitrate", "resolution_width", "resolution_height",
                 "video_codec", "color_profile", "audio_languages", "has_english_audio",
-                "audio_profile")
+                "audio_profile", "subtitle_languages", "has_embedded_english_subtitle")
 
 
 def update_stream_fields(conn, filepath, probed):

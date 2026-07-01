@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS media_files (
     audio_languages TEXT,
     has_english_audio TEXT,
     audio_profile TEXT,
+    subtitle_languages TEXT,
+    has_embedded_english_subtitle TEXT,
     metadata_id TEXT,
     match_status TEXT,
     item_type TEXT CHECK(item_type IN ('movie', 'episode')),
@@ -77,6 +79,25 @@ def get_connection(db_path):
     return conn
 
 
+# Columns added after the initial schema shipped. init_db back-fills these onto
+# existing databases via ALTER (ADD COLUMN is safe/backward-compatible), so upgrading
+# an old catalog never requires a rebuild.
+_MIGRATIONS = {
+    "media_files": {
+        "subtitle_languages": "TEXT",
+        "has_embedded_english_subtitle": "TEXT",
+    },
+}
+
+
+def _ensure_columns(conn, table, columns):
+    """Add any missing columns to `table` (idempotent)."""
+    existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+    for name, decl in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
 def init_db(db_path):
     parent = os.path.dirname(db_path)
     if parent:
@@ -85,6 +106,8 @@ def init_db(db_path):
     try:
         with db_write_lock:
             conn.executescript(SCHEMA)
+            for table, columns in _MIGRATIONS.items():
+                _ensure_columns(conn, table, columns)
             conn.commit()
     finally:
         conn.close()

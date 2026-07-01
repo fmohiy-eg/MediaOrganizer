@@ -178,6 +178,20 @@ def test_english_subtitle_deficits(tmp_path):
     assert deficits == ["/d/NoSub.mkv"]
 
 
+def test_deficit_excludes_files_with_embedded_english_subtitle(tmp_path):
+    from src.web.services import english_subtitle_deficits, english_subtitle_deficit_count
+    conn = _conn(tmp_path)
+    # embedded English track -> NOT a deficit (don't waste an OpenSubtitles download)
+    upsert_media_file(conn, _rec("/d/Embedded.mkv", has_embedded_english_subtitle="yes"))
+    # embedded subs present but not English -> still a deficit
+    upsert_media_file(conn, _rec("/d/OtherLang.mkv", has_embedded_english_subtitle="no"))
+    # never probed (NULL) -> still a deficit (we don't hide unknown gaps)
+    upsert_media_file(conn, _rec("/d/Unprobed.mkv"))
+    deficits = sorted(r["filepath"] for r in english_subtitle_deficits(conn))
+    assert deficits == ["/d/OtherLang.mkv", "/d/Unprobed.mkv"]
+    assert english_subtitle_deficit_count(conn) == 2
+
+
 def test_flagged_audio_movies_filters_and_summarizes(tmp_path):
     from src.web.services import flagged_audio_movies
     conn = _conn(tmp_path)
