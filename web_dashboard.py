@@ -27,7 +27,8 @@ from src.parsing import parse_path
 from src.web.services import (library_kpis, variant_conflicts, unmatched_list,
                               english_subtitle_deficits, english_subtitle_deficit_count,
                               missing_episodes, legacy_duplicates, flagged_audio_movies,
-                              mismatched_videos, admin_status, probe_targets)
+                              mismatched_videos, admin_status, probe_targets,
+                              quality_variant_conflicts)
 from src.web.sync import find_missing
 from src.web.subtitle_fetch import fetch_and_ingest, to_local_path, to_nas_path
 from src.web.inspect import format_duration, assess_versions, title_mismatch
@@ -151,13 +152,15 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
                exists_fn=os.path.exists, build_id=None,
                probe_json_fn=probe_raw_json, walk_fn=_walk_files,
                getsize_fn=os.path.getsize, scandir_fn=_scandir, rmdir_fn=os.rmdir,
-               spawn_probe_fn=_spawn_probe, audio_flag=None):
+               spawn_probe_fn=_spawn_probe, audio_flag=None, variant_priority=None):
     app = FastAPI(title="NAS Media Organizer")
     build_id = build_id or "dev"
     path_map = path_map or {}
     media_paths = media_paths or []
     if player_fn is None:
         player_fn = lambda p: launch_player(p, player_binary)
+    variant_priority = tuple(variant_priority or
+                             ("resolution", "bitrate", "codec", "audio_channels"))
     audio_flag = audio_flag or {}
     flag_langs = audio_flag.get("languages") or []
     flag_label = audio_flag.get("label") or "Flagged Audio"
@@ -195,6 +198,7 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
             "unmatched": len(unmatched_list(c)),
             "flagged_movies": flagged_audio_movies(c, flag_langs, flag_subdir)["count"],
             "flagged_label": flag_label,
+            "quality_variants": quality_variant_conflicts(c, variant_priority)["group_count"],
         }
 
     @app.get("/api/config")
@@ -206,6 +210,11 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
     @app.get("/api/variants")
     def variants():
         return variant_conflicts(conn())
+
+    @app.get("/api/quality")
+    def quality():
+        """Cross-folder quality variants of the same movie (needs probe data)."""
+        return quality_variant_conflicts(conn(), variant_priority)
 
     @app.post("/api/variant/probe")
     def variant_probe(body: ProbeBody):

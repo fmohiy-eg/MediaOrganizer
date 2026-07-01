@@ -3,6 +3,7 @@ import os
 
 from src.parsing import parse_path
 from src.audit.gaps import analyze_gaps
+from src.audit.quality import group_variants, select_keeper, quality_score
 
 
 def probe_targets(conn):
@@ -137,6 +138,56 @@ def variant_conflicts(conn, deviation_seconds=120):
                     "runtime_class": _runtime_class(items, deviation_seconds)})
     out.sort(key=lambda g: g["reclaimable_bytes"], reverse=True)
     return out
+
+
+_DEFAULT_PRIORITY = ("resolution", "bitrate", "codec", "audio_channels")
+
+
+def _quality_label(row):
+    parts = []
+    if row.get("resolution_height"):
+        parts.append(f"{row.get('resolution_width') or '?'}x{row['resolution_height']}")
+    if row.get("video_codec"):
+        parts.append(row["video_codec"])
+    if row.get("bitrate"):
+        parts.append(f"{row['bitrate'] // 1000}kbps")
+    return " · ".join(parts) or "unprobed"
+
+
+def quality_variant_conflicts(conn, priority=_DEFAULT_PRIORITY):
+    """The SAME movie present at different quality (resolution/codec/bitrate) across
+    DIFFERENT folders — e.g. a 720p copy in one folder and a 1080p in another. This is
+    invisible to the same-folder Duplicates tab. Movies only (episodes share one
+    series-level metadata_id, so grouping them by id would merge a whole show); probed
+    files only (quality ranking needs ffprobe data). The highest-quality copy is the
+    suggested keeper; the rest are reclaim candidates."""
+    rows = conn.execute(
+        "SELECT m.filepath, m.parent_directory, m.metadata_id, "
+        "       m.resolution_width, m.resolution_height, m.bitrate, m.video_codec, "
+        "       m.audio_profile, m.file_size_bytes, c.title "
+        "FROM media_files m LEFT JOIN metadata_cache c ON c.metadata_id = m.metadata_id "
+        "WHERE m.item_type = 'movie' AND m.metadata_id IS NOT NULL "
+        "      AND m.duration_ms IS NOT NULL").fetchall()
+    groups = group_variants([dict(r) for r in rows])
+    out = []
+    for mid, members in groups.items():
+        # Skip a group that is a single same-folder/same-basename cluster — those are
+        # format variants the Duplicates tab already covers; this tab is cross-folder.
+        if len({_variant_key(m["filepath"]) for m in members}) == 1:
+            continue
+        keeper = select_keeper(members, priority)
+        for m in members:
+            m["is_keeper"] = m["filepath"] == keeper["filepath"]
+            m["quality"] = _quality_label(m)
+        members.sort(key=lambda m: quality_score(m, priority), reverse=True)
+        reclaimable = sum(m["file_size_bytes"] for m in members if not m["is_keeper"])
+        title = members[0].get("title") or os.path.basename(
+            os.path.dirname(members[0]["filepath"].replace("\\", "/")))
+        out.append({"metadata_id": mid, "title": title, "items": members,
+                    "reclaimable_bytes": reclaimable})
+    out.sort(key=lambda g: g["reclaimable_bytes"], reverse=True)
+    return {"groups": out, "group_count": len(out),
+            "total_bytes": sum(g["reclaimable_bytes"] for g in out)}
 
 
 # A file is a subtitle "deficit" only if it has NEITHER an external English sidecar NOR

@@ -30,6 +30,24 @@ def test_search_params_unmatched_movie_uses_query_year_and_movie_type():
     assert "tmdb_id" not in p
 
 
+def test_quality_variants_endpoint_and_tab(tmp_path):
+    db = str(tmp_path / "m.db"); init_db(db); conn = get_connection(db)
+    for path, h, size in [("/movies/Heat 1080p/Heat.mkv", 1080, 8_000_000_000),
+                          ("/movies/Heat 720p/Heat.mkv", 720, 3_000_000_000)]:
+        upsert_media_file(conn, dict(
+            filepath=path, filename="Heat.mkv", extension=".mkv",
+            parent_directory=path.rsplit("/", 1)[0], file_size_bytes=size,
+            fast_hash="h", os_hash="o", item_type="movie", metadata_id="tmdb:1",
+            resolution_width=1920, resolution_height=h, duration_ms=6_000_000,
+            video_codec="hevc", bitrate=8_000_000))
+    client = TestClient(create_app(db, str(tmp_path / "q")))
+    d = client.get("/api/quality").json()
+    assert d["group_count"] == 1 and d["groups"][0]["items"][0]["is_keeper"]
+    assert d["total_bytes"] == 3_000_000_000
+    html = client.get("/").text
+    assert 'data-tab="quality"' in html and "loadQuality" in html
+
+
 def test_relocate_preview_clear_error_when_root_name_unrecognized(tmp_path):
     # Folders not named Movies/TV -> pick_roots can't identify them; Fix must return
     # a clear 400, not a 500 crash.

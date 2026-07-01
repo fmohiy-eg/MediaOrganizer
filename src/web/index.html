@@ -14,6 +14,7 @@
     <button data-tab="overview"   class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Overview</button>
     <button data-tab="dupsame" data-panel="duplicates" class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Dupes · Same length</button>
     <button data-tab="dupdiff" data-panel="duplicates" class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Dupes · Diff length</button>
+    <button data-tab="quality"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Quality Variants</button>
     <button data-tab="mismatch"   class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Mismatch Videos</button>
     <button data-tab="cleanup"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Cleanup</button>
     <button data-tab="missing"    class="tab px-4 py-2 -mb-px border-b-2 border-transparent">Missing Episodes</button>
@@ -48,6 +49,14 @@
       </div>
     </div>
     <div id="dupcard"></div>
+  </section>
+
+  <!-- QUALITY VARIANTS (same movie, different folders, different quality) -->
+  <section data-panel="quality" class="hidden">
+    <h2 class="text-lg font-medium">Quality Variants</h2>
+    <p class="text-xs text-slate-500 mb-3">The <b>same movie</b> stored at different quality in <b>different folders</b> (e.g. a 720p copy alongside a 1080p) — invisible to the Duplicates tab, which only groups same-folder copies. Ranked by resolution → bitrate → codec → audio; the best copy is the suggested keeper. Needs probe data (Admin → Probe) and a matched movie ID. Movies only.</p>
+    <div id="quality-head" class="text-sm text-slate-600 mb-3"></div>
+    <div id="quality-list" class="space-y-3 text-sm"></div>
   </section>
 
   <!-- MISMATCH VIDEOS -->
@@ -229,6 +238,7 @@ function showTab(name) {
   if (name === 'missing' && !window.missingLoaded) loadMissing();
   if (name === 'subtitles' && !window.deficits) loadDeficits();
   if (name === 'mismatch' && !window.mismatchLoaded) loadMismatch();
+  if (name === 'quality' && !window.qualityLoaded) loadQuality();
   if (name === 'audioflag' && !window.audioflagLoaded) loadAudioFlag();
   if (name === 'review' && !window.review) loadReview();
   if (name === 'admin') loadAdmin();
@@ -248,6 +258,7 @@ async function loadOverview() {
   document.getElementById('overview-extra').innerHTML = `
     <p>&bull; <b>${s.duplicate_groups.toLocaleString()}</b> duplicate / variant groups to review
        (potential <b>${GB(s.duplicate_reclaimable_bytes)}</b> reclaimable). Open the <b>Duplicates</b> tab.</p>
+    ${s.quality_variants ? `<p>&bull; <b>${s.quality_variants.toLocaleString()}</b> movies stored at different quality across folders. Open the <b>Quality Variants</b> tab.</p>` : ''}
     <p>&bull; <b>${s.subtitle_deficits.toLocaleString()}</b> files with no external English subtitle. Open the <b>Subtitles</b> tab.</p>
     <p>&bull; <b>${s.unmatched.toLocaleString()}</b> files without a Jellyfin ID in <b>Needs Review</b>.</p>
     ${s.flagged_movies ? `<p>&bull; <b>${s.flagged_movies.toLocaleString()}</b> movies with a flagged audio track. Open the <b>${he(s.flagged_label || 'Flagged Audio')}</b> tab.</p>` : ''}`;
@@ -447,6 +458,42 @@ function dupJump() {
   if (isNaN(v)) return;
   const target = Math.min(Math.max(1, v), window.groups.length) - 1;
   if (target !== dupi) { dupi = target; renderDup(); }
+}
+
+// ---- quality variants (same movie, different folders, different quality) ----
+async function loadQuality() {
+  const d = await (await fetch('/api/quality')).json();
+  window.qualityLoaded = true;
+  document.getElementById('quality-head').innerHTML =
+    `<b>${d.group_count}</b> movie(s) with cross-folder quality variants &bull; <b>${GB(d.total_bytes)}</b> reclaimable`;
+  document.getElementById('quality-list').innerHTML = d.groups.map(g => `
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="flex items-baseline justify-between mb-2">
+        <div class="font-medium break-all">${he(g.title)}</div>
+        <div class="text-xs text-slate-400 shrink-0 ml-2">${g.items.length} copies &bull; reclaim ${GB(g.reclaimable_bytes)}</div>
+      </div>
+      <table class="w-full text-sm">
+        ${g.items.map(it => `
+          <tr class="border-t" data-fp="${esc(it.filepath)}">
+            <td class="py-1.5">${it.is_keeper ? '<span class="text-green-700 font-medium">KEEP?</span> ' : ''}<span class="break-all">${he(it.filepath)}</span></td>
+            <td class="py-1.5 px-2 whitespace-nowrap text-slate-500">${he(it.quality)}</td>
+            <td class="py-1.5 px-2 text-right whitespace-nowrap">${GB(it.file_size_bytes)}</td>
+            <td class="py-1.5 pl-2 text-right whitespace-nowrap">
+              <button onclick="playFile('${esc(it.filepath)}')" class="text-slate-600 hover:underline" title="Play">&#9654;</button>
+              <button onclick="qualityDelete('${esc(it.filepath)}')" class="${it.is_keeper ? 'text-slate-400' : 'text-red-600'} hover:underline ml-1" title="${it.is_keeper ? 'This is the suggested keep — delete anyway?' : 'Move to quarantine'}">Delete</button>
+            </td>
+          </tr>`).join('')}
+      </table>
+    </div>`).join('') || '<p class="text-slate-400">No cross-folder quality variants found (needs probed, matched movies).</p>';
+}
+async function qualityDelete(fp) {
+  const prev = await (await fetch('/api/delete/preview', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({filepath: fp})})).json();
+  if (!confirm(`Move ${prev.moves.length} file(s) to quarantine?\n\n` + prev.moves.map(m=>m[0]).join('\n'))) return;
+  await fetch('/api/delete/execute', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({filepath: fp, confirm: true})});
+  document.querySelector(`#quality-list [data-fp="${CSS.escape(fp)}"]`)?.remove();
+  loadOverview();
 }
 async function dupDelete(fp) {
   const prev = await (await fetch('/api/delete/preview',
