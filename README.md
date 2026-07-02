@@ -13,7 +13,7 @@ Runs **on a single machine** (media on a local, external, or mounted drive) or i
 - **Catalog** every media file (path, size, name, season/episode, sidecars) — fast inventory pass, no heavy reads.
 - **Identify** titles from Jellyfin/Kodi `.nfo` IDs (free, accurate), with a TMDB/TVDB lookup fallback.
 - **Duplicate triage** — groups same-name copies in a folder, **split into Same length / Diff length** by runtime. Each copy shows **runtime / resolution / codec / embedded subtitles / container internal title** (probed on demand), flags filename-vs-embedded-title mismatches, warns when copies are *different versions* rather than true duplicates, and explains **why** the suggested keeper won. You can delete **any** copy (the "KEEP?" is just a hint).
-- **Quality Variants** — finds the **same movie stored at different quality across different folders** (e.g. a 720p copy alongside a 1080p) — the cross-folder redundancy the per-folder Duplicates tab can't see. Ranks by resolution → bitrate → codec → audio and marks the keeper.
+- **Quality Variants** — finds the **same movie stored at different quality across different folders** (e.g. a 720p copy alongside a 1080p) — the cross-folder redundancy the per-folder Duplicates tab can't see. Ranks by resolution → bitrate → codec → audio and marks the keeper. (Movies appear once they're identified *and* probed — run the probe from the Admin tab.)
 - **Cleanup** — one-click quarantine of legacy-format files that already have a modern copy.
 - **Missing episodes** — diffs each show's full TVDB episode list against what's on disk (specials excluded).
 - **Subtitles** — checks for embedded English tracks, and fetches/unzips/cleans/renames external subs from OpenSubtitles (session-only login, daily-quota aware).
@@ -69,13 +69,13 @@ python run_dashboard.py config.yaml   # dashboard at http://localhost:8081
 python cli_engine.py config.yaml      # CLI engine (task menu)
 ```
 
-The dashboard port comes from `server.port` in your config (default **8081**); a CLI arg overrides it (`python run_dashboard.py config.yaml 8082`). Set a distinct port + its own `database_path`/`quarantine_path`/`log_directory` to run several instances side by side.
+The dashboard port comes from `server.port` in your config (default **8081**); a CLI arg overrides it (`python run_dashboard.py config.yaml 8082`). To run several instances side by side, give each a distinct port plus its own `database_path`/`quarantine_path`/`log_directory`, and set `instance_name` (e.g. `"Test"`) so each shows a label in its header and browser tab.
 
 ## Contributing / running the tests
 
 ```bash
 pip install -r requirements-dev.txt   # runtime + test deps
-python -m pytest -q                    # ~281 tests, fully offline
+python -m pytest -q                    # ~297 tests, fully offline
 ```
 
 The codebase is small pure modules under `src/` with external effects (ffprobe, HTTP, disk) injected, so the whole suite runs without a network, a real library, or ffprobe installed.

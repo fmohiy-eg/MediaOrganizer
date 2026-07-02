@@ -55,11 +55,16 @@ Duplicate groups are split into **two tabs by runtime**:
 - **Same length** — every copy has the same runtime → genuine duplicates, safe to dedupe.
 - **Diff length** — at least one copy differs (or hasn't been runtime-checked yet) → review carefully; they might be *different versions* (a cut-down file, a Director's Cut, etc.).
 
-Each steps through groups **one at a time** (biggest space-savings first) and shows, per copy: **runtime, resolution, codec, embedded subtitles, the file's internal title, and size**, with a suggested **KEEP?** (just a hint — you can delete **any** copy, including the suggested one).
+Each steps through groups **one at a time** (biggest space-savings first) and shows, per copy: **runtime, resolution, codec, embedded subtitles, the file's internal title, and size**, with a suggested **KEEP?** (just a hint — you can delete **any** copy, including the suggested one). A short green note under the group header explains **why** that copy was suggested (e.g. *modern format (.mkv vs .wmv); 1080p vs 720p; 2.00 GB vs 700 MB*).
 - A **red note** under a filename means its **internal title disagrees with the filename** — a sign the file is mislabeled.
 - Buttons: **▶** plays the file, **Fix** relabels/moves it (see §5), **Delete** sends it to quarantine. If you've enabled the **Audio Language** feature, a button also appears to move just that file into your configured staging folder.
 - **Navigation:** use **← Prev / Next →**, or type a number in the **Group _ of N** box and press Enter to jump straight to a group. The **type dropdown** (All / Movies / TV Shows) filters which duplicate groups you see. Opening a group also pre-fetches the next two in the background, so Next feels instant.
 - The runtime/resolution/etc. fill in when you open a group; to pre-fill them for *all* groups (and enable the same/diff split), run the runtime probe — see §6 step **F**.
+
+### Quality Variants
+The **same movie stored at different quality in different folders** — e.g. a 720p copy in one folder and a 1080p in another. The Duplicates tabs can't see these (they only group copies inside one folder). Copies are ranked by resolution → bitrate → codec → audio channels; the best one is marked **KEEP?** and the rest count as reclaimable space.
+- A movie appears here only once it's been **identified** (Jellyfin ID or re-match) **and probed** (§6 step F / Admin → Probe) — the ranking needs the probe's resolution/codec data.
+- **▶** previews a copy; **Delete** sends it to quarantine (same safe flow as everywhere else).
 
 ### Cleanup
 A focused list of **old-format files that already have a modern copy**. Delete them one by one, or **"Quarantine all"** in one click. The modern copy keeps its shared subtitles/artwork automatically.
@@ -69,9 +74,9 @@ For each show, the episodes that **already aired but aren't on your disk** (e.g.
 *(Needs the episode lists fetched first — see §6 step D.)*
 
 ### Subtitles
-Files with **no external English subtitle**.
+Files with **no English subtitle** — neither an external `.srt` next to the video nor a probed built-in English track. Files that already carry built-in English subs drop off automatically once they've been probed (§6 step F), so you don't waste your download quota on them.
 - **Log in** to OpenSubtitles (top of the tab) — your login is kept only while the page is open, never saved.
-- **Check built-in** — see if a file already has an English subtitle baked in (so you don't waste a download).
+- **Check built-in** — spot-check a single not-yet-probed file for a baked-in English subtitle.
 - **Fetch sub** — downloads the best English subtitle, unzips/cleans it, and drops it next to the video.
 - The **quota** indicator shows how many downloads you have left today and when it resets (free accounts get a limited number per day).
 
@@ -205,7 +210,7 @@ python probe_dupes.py config.yaml
 
 | Problem | Fix |
 |--------|-----|
-| Dashboard won't open at localhost:8080 | Make sure the `python run_dashboard.py config.yaml` window is still running. If it closed, run it again. |
+| Dashboard won't open at localhost:8081 | Make sure the `python run_dashboard.py config.yaml` window is still running (and that you're using the port from `server.port` in your config). If it closed, run it again. |
 | Runtime/codec/audio columns or the Probe panel don't work | `ffprobe` isn't installed or found. See README → Prerequisites. The dashboard prints a warning at startup if it's missing; set `ffprobe.binary` in config if it's installed somewhere unusual. |
 | "Not reachable" when playing/deleting (NAS split) | The network share isn't connected. Reconnect it in your file manager, then retry. |
 | Missing Episodes tab is empty | Run step **6.D** (`gaps_live.py`) once to fetch the episode lists. |
