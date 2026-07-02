@@ -18,3 +18,10 @@ def test_cli_port_overrides_config():
 def test_cli_host_overrides_config():
     cfg = {"server": {"host": "0.0.0.0", "port": 8081}}
     assert resolve_bind(cfg, cli_host="127.0.0.1")[0] == "127.0.0.1"
+
+
+def test_non_numeric_port_exits_cleanly():
+    import pytest
+    with pytest.raises(SystemExit) as e:               # clean message, not a traceback
+        resolve_bind({}, cli_port="abc")
+    assert e.value.code == 1

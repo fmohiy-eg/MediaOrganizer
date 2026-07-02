@@ -160,17 +160,35 @@ def quality_variant_conflicts(conn, priority=_DEFAULT_PRIORITY):
     invisible to the same-folder Duplicates tab. Movies only (episodes share one
     series-level metadata_id, so grouping them by id would merge a whole show); probed
     files only (quality ranking needs ffprobe data). The highest-quality copy is the
-    suggested keeper; the rest are reclaim candidates."""
+    suggested keeper; the rest are reclaim candidates.
+
+    Movie-ness is derived from parse_path + the tmdb: id namespace, NOT the item_type
+    column — the scan pipeline never populates that column (it's NULL on real catalogs,
+    which would silently empty this view). The tmdb: check also keeps out any episode
+    that parse_path might mis-read as a movie (episodes carry series-level tvdb: ids)."""
+    # Fetch only members of ids that occur 2+ times (uses idx_media_metadata) — on a
+    # large catalog almost every movie is single-copy, and /api/summary calls this on
+    # every load, so filtering in SQL keeps the Python side to a handful of rows.
     rows = conn.execute(
         "SELECT m.filepath, m.parent_directory, m.metadata_id, "
         "       m.resolution_width, m.resolution_height, m.bitrate, m.video_codec, "
         "       m.audio_profile, m.file_size_bytes, c.title "
         "FROM media_files m LEFT JOIN metadata_cache c ON c.metadata_id = m.metadata_id "
-        "WHERE m.item_type = 'movie' AND m.metadata_id IS NOT NULL "
-        "      AND m.duration_ms IS NOT NULL").fetchall()
+        "WHERE m.metadata_id LIKE 'tmdb:%' AND m.duration_ms IS NOT NULL "
+        "  AND m.metadata_id IN ("
+        "    SELECT metadata_id FROM media_files "
+        "    WHERE metadata_id LIKE 'tmdb:%' AND duration_ms IS NOT NULL "
+        "    GROUP BY metadata_id HAVING COUNT(*) > 1)").fetchall()
     groups = group_variants([dict(r) for r in rows])
     out = []
     for mid, members in groups.items():
+        # Movie-ness guard via parse_path, applied only to the few rows that share a
+        # tmdb id (group_variants already dropped single-copy movies — the vast
+        # majority — so this stays cheap even when /api/summary calls it per load).
+        members = [m for m in members
+                   if parse_path(m["filepath"])["item_type"] == "movie"]
+        if len(members) < 2:
+            continue
         # Skip a group that is a single same-folder/same-basename cluster — those are
         # format variants the Duplicates tab already covers; this tab is cross-folder.
         if len({_variant_key(m["filepath"]) for m in members}) == 1:

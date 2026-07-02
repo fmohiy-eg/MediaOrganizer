@@ -14,7 +14,7 @@ This is the **shareable/distributable** build (forked from a single-user QNAP se
 pip install -r requirements.txt
 python setup_wizard.py                                # first-run wizard -> writes config.yaml
 pip install -r requirements-dev.txt                   # runtime + test deps (pytest, httpx)
-python -m pytest -q                                   # full suite (~294 tests)
+python -m pytest -q                                   # full suite (~297 tests)
 python -m pytest tests/test_parsing.py -q             # one file
 python -m pytest tests/web/test_inspect.py::test_format_duration -v   # one test
 python cli_engine.py config.yaml                      # interactive CLI engine (7-task menu)

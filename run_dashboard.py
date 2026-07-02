@@ -37,7 +37,13 @@ def resolve_bind(config, cli_host=None, cli_port=None):
     else 0.0.0.0:8081. Lets multiple instances run at once on different ports."""
     srv = config.get("server") or {}
     host = cli_host or srv.get("host") or "0.0.0.0"
-    port = int(cli_port or srv.get("port") or 8081)
+    raw = cli_port or srv.get("port") or 8081
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        print(f"Invalid port {raw!r} — use a number, e.g.: "
+              "python run_dashboard.py config.yaml 8082")
+        sys.exit(1)
     return host, port
 
 

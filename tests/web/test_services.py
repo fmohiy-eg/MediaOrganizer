@@ -181,16 +181,20 @@ def test_english_subtitle_deficits(tmp_path):
 def test_quality_variant_conflicts_flags_cross_folder_quality(tmp_path):
     from src.web.services import quality_variant_conflicts
     conn = _conn(tmp_path)
+    # NOTE: item_type deliberately NOT set — the scan pipeline never populates that
+    # column on real catalogs, so this feature must work from parse_path + the tmdb:
+    # namespace alone (regression: the first version filtered on item_type and was
+    # silently empty on real data).
     # SAME movie in two different folders at different quality, both probed
     upsert_media_file(conn, _rec("/movies/Heat 1080p/Heat.mkv", mid="tmdb:1",
-        item_type="movie", size=8_000_000_000, resolution_width=1920,
+        size=8_000_000_000, resolution_width=1920,
         resolution_height=1080, video_codec="hevc", bitrate=10_000_000, duration_ms=6_000_000))
     upsert_media_file(conn, _rec("/movies/Heat 720p/Heat.mkv", mid="tmdb:1",
-        item_type="movie", size=3_000_000_000, resolution_width=1280,
+        size=3_000_000_000, resolution_width=1280,
         resolution_height=720, video_codec="h264", bitrate=4_000_000, duration_ms=6_000_000))
     # a different movie with a single copy -> not a conflict
     upsert_media_file(conn, _rec("/movies/Other/Other.mkv", mid="tmdb:2",
-        item_type="movie", resolution_height=1080, duration_ms=5_000_000))
+        resolution_height=1080, duration_ms=5_000_000))
     res = quality_variant_conflicts(conn)
     assert res["group_count"] == 1
     g = res["groups"][0]
@@ -202,19 +206,20 @@ def test_quality_variant_conflicts_flags_cross_folder_quality(tmp_path):
 def test_quality_variants_excludes_episodes_unprobed_and_same_folder(tmp_path):
     from src.web.services import quality_variant_conflicts
     conn = _conn(tmp_path)
-    # episodes share ONE series-level id — must never be grouped as a quality conflict
+    # episodes share ONE series-level tvdb: id — must never be grouped as a quality
+    # conflict (excluded by both the tvdb: namespace and parse_path classification)
     upsert_media_file(conn, _rec("/tv/Show/S01/Show - S01E01.mkv", mid="tvdb:9",
-        item_type="episode", resolution_height=1080, duration_ms=1000))
+        resolution_height=1080, duration_ms=1000))
     upsert_media_file(conn, _rec("/tv/Show/S01/Show - S01E02.mkv", mid="tvdb:9",
-        item_type="episode", resolution_height=1080, duration_ms=1000))
+        resolution_height=1080, duration_ms=1000))
     # same movie, same folder, format-only variants -> the Duplicates tab's job, not here
     upsert_media_file(conn, _rec("/m/Heat/Heat.mkv", mid="tmdb:3",
-        item_type="movie", resolution_height=1080, duration_ms=1000))
+        resolution_height=1080, duration_ms=1000))
     upsert_media_file(conn, _rec("/m/Heat/Heat.avi", mid="tmdb:3",
-        item_type="movie", resolution_height=1080, duration_ms=1000))
+        resolution_height=1080, duration_ms=1000))
     # cross-folder movie pair but UNPROBED (no quality data) -> excluded
-    upsert_media_file(conn, _rec("/m/A 1080/A.mkv", mid="tmdb:4", item_type="movie"))
-    upsert_media_file(conn, _rec("/m/A 720/A.mkv", mid="tmdb:4", item_type="movie"))
+    upsert_media_file(conn, _rec("/m/A 1080/A.mkv", mid="tmdb:4"))
+    upsert_media_file(conn, _rec("/m/A 720/A.mkv", mid="tmdb:4"))
     assert quality_variant_conflicts(conn)["group_count"] == 0
 
 

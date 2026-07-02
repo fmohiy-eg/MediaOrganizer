@@ -155,7 +155,7 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
                getsize_fn=os.path.getsize, scandir_fn=_scandir, rmdir_fn=os.rmdir,
                spawn_probe_fn=_spawn_probe, audio_flag=None, variant_priority=None,
                instance_name=""):
-    app = FastAPI(title="NAS Media Organizer")
+    app = FastAPI(title="Media Organizer")
     build_id = build_id or "dev"
     path_map = path_map or {}
     media_paths = media_paths or []
