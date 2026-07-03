@@ -4,7 +4,9 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
-config.yaml
+# All local configs (config.yaml, config.test.yaml, ...) — only the example is tracked
+config*.yaml
+!config.example.yaml
 .env
 _local/
 nas_check.sh
