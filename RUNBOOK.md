@@ -64,6 +64,7 @@ Each steps through groups **one at a time** (biggest space-savings first) and sh
 ### Quality Variants
 The **same movie stored at different quality in different folders** — e.g. a 720p copy in one folder and a 1080p in another. The Duplicates tabs can't see these (they only group copies inside one folder). Copies are ranked by resolution → bitrate → codec → audio channels; the best one is marked **KEEP?** and the rest count as reclaimable space.
 - A movie appears here only once it's been **identified** (Jellyfin ID or re-match) **and probed** (§6 step F / Admin → Probe) — the ranking needs the probe's resolution/codec data.
+- **Only true redundant copies are listed.** Copies with meaningfully different runtimes (an extended cut, a different edit) are treated as *different versions* and excluded, as are split films (CD1/CD2), anything that looks like a TV episode, and same-id files whose release years differ (a mis-matched ID).
 - **▶** previews a copy; **Delete** sends it to quarantine (same safe flow as everywhere else).
 
 ### Cleanup

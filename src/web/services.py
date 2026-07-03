@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from src.parsing import parse_path
 from src.audit.gaps import analyze_gaps
@@ -142,6 +143,38 @@ def variant_conflicts(conn, deviation_seconds=120):
 
 _DEFAULT_PRIORITY = ("resolution", "bitrate", "codec", "audio_channels")
 
+# Multi-part markers (CD1/CD2, Disc 1, part2, pt3, "1 of 2"). Anchored to the end of the
+# filename stem so a part of a split film is recognised as ONE movie, not a rival copy.
+_MULTIPART_RE = re.compile(
+    r"(?:^|[\s._\-\(\[])(?:cd|dvd|disc|disk|part|pt)[\s._\-]?\d{1,2}"
+    r"(?:\s*of\s*\d{1,2})?[\s._\-\)\]]*$", re.IGNORECASE)
+
+
+def _is_multipart(filepath):
+    """True if the filename looks like one part of a split movie (CD1/CD2/part2/disc1).
+    Such files share a single metadata_id but are ONE film, so they must never be
+    offered as rival quality copies."""
+    stem = os.path.splitext(os.path.basename(filepath.replace("\\", "/")))[0]
+    return bool(_MULTIPART_RE.search(stem))
+
+
+# An episode token in the filename (SxxExx, 1x01, bare Enn/EpNN) or a season-style
+# ancestor folder marks a file as TV. This catches the bare-`Enn` episodes that
+# `parse_path` mis-reads as movies — critical because every episode of a show shares
+# one series-level metadata_id, so they must never be grouped as one movie's copies.
+_TV_TOKEN_RE = re.compile(
+    r"(?:^|[\s._-])(?:s\d{1,2}e\d{1,3}|\d{1,2}x\d{2,3}|e\d{1,3}|ep\d{1,3}|episode\s*\d{1,3})"
+    r"(?:[\s._-]|$)", re.IGNORECASE)
+_SEASON_DIR_RE = re.compile(r"^(?:season\s*\d+|specials|s\d{1,2})$", re.IGNORECASE)
+
+
+def _looks_like_tv(filepath):
+    segs = [s for s in filepath.replace("\\", "/").split("/") if s]
+    if any(_SEASON_DIR_RE.match(s) for s in segs[:-1]):
+        return True
+    stem = os.path.splitext(segs[-1])[0] if segs else ""
+    return bool(_TV_TOKEN_RE.search(stem))
+
 
 def _quality_label(row):
     parts = []
@@ -154,23 +187,33 @@ def _quality_label(row):
     return " · ".join(parts) or "unprobed"
 
 
-def quality_variant_conflicts(conn, priority=_DEFAULT_PRIORITY):
+def quality_variant_conflicts(conn, priority=_DEFAULT_PRIORITY, deviation_seconds=120):
     """The SAME movie present at different quality (resolution/codec/bitrate) across
-    DIFFERENT folders — e.g. a 720p copy in one folder and a 1080p in another. This is
-    invisible to the same-folder Duplicates tab. Movies only (episodes share one
-    series-level metadata_id, so grouping them by id would merge a whole show); probed
-    files only (quality ranking needs ffprobe data). The highest-quality copy is the
-    suggested keeper; the rest are reclaim candidates.
+    DIFFERENT folders — e.g. a 720p copy in one folder and a 1080p in another. Invisible
+    to the same-folder Duplicates tab. The highest-quality copy is the suggested keeper;
+    the rest are reclaim candidates.
 
-    Movie-ness is derived from parse_path + the tmdb: id namespace, NOT the item_type
-    column — the scan pipeline never populates that column (it's NULL on real catalogs,
-    which would silently empty this view). The tmdb: check also keeps out any episode
-    that parse_path might mis-read as a movie (episodes carry series-level tvdb: ids)."""
+    SAFETY (guards hardened against a real 53k-row catalog): the stored `item_type`
+    column is unpopulated (NULL from the inventory scan), and `parse_path` mis-reads
+    bare-`Enn` episodes (no `Sxx`) as movies — and every episode of a show shares ONE
+    series-level metadata_id. Grouping by id alone would offer a whole show's episodes
+    as "quality variants of one movie" (the catastrophic false-delete CLAUDE.md warns
+    about). So a group is surfaced ONLY when it is genuinely one work in several places,
+    proven by data, not by the unreliable type flag:
+      * tmdb:-namespaced id (movies are matched via TMDB; episodes carry tvdb:);
+      * cross-folder — spans >= 2 distinct parent directories;
+      * not TV — no season-style folder or episode token (see _looks_like_tv);
+      * not multi-part — a split film (CD1/CD2) shares one id but is one movie;
+      * single release year — an upstream mis-match sharing one id (e.g. "Solace"
+        tagged as "Quantum of Solace") must not group two different films;
+      * same runtime within `deviation_seconds` — distinct episodes differ in length,
+        and an extended cut is a *different version*, not a redundant copy.
+    Probed files only (ranking needs ffprobe data)."""
     # Fetch only members of ids that occur 2+ times (uses idx_media_metadata) — on a
     # large catalog almost every movie is single-copy, and /api/summary calls this on
     # every load, so filtering in SQL keeps the Python side to a handful of rows.
     rows = conn.execute(
-        "SELECT m.filepath, m.parent_directory, m.metadata_id, "
+        "SELECT m.filepath, m.parent_directory, m.metadata_id, m.duration_ms, "
         "       m.resolution_width, m.resolution_height, m.bitrate, m.video_codec, "
         "       m.audio_profile, m.file_size_bytes, c.title "
         "FROM media_files m LEFT JOIN metadata_cache c ON c.metadata_id = m.metadata_id "
@@ -182,17 +225,26 @@ def quality_variant_conflicts(conn, priority=_DEFAULT_PRIORITY):
     groups = group_variants([dict(r) for r in rows])
     out = []
     for mid, members in groups.items():
-        # Movie-ness guard via parse_path, applied only to the few rows that share a
-        # tmdb id (group_variants already dropped single-copy movies — the vast
-        # majority — so this stays cheap even when /api/summary calls it per load).
+        # TV/episode guard, applied only to the few rows that share a tmdb id
+        # (group_variants already dropped single-copy movies — the vast majority).
         members = [m for m in members
-                   if parse_path(m["filepath"])["item_type"] == "movie"]
+                   if not _looks_like_tv(m["filepath"])
+                   and parse_path(m["filepath"])["item_type"] != "episode"]
         if len(members) < 2:
             continue
-        # Skip a group that is a single same-folder/same-basename cluster — those are
-        # format variants the Duplicates tab already covers; this tab is cross-folder.
-        if len({_variant_key(m["filepath"]) for m in members}) == 1:
+        # Cross-folder only — same-folder clusters are the Duplicates tab's job (and a
+        # same-folder multi-file dump is usually episodes).
+        if len({os.path.dirname(m["filepath"].replace("\\", "/")) for m in members}) < 2:
             continue
+        if any(_is_multipart(m["filepath"]) for m in members):
+            continue  # split film (CD1/CD2) — one movie, not rival copies
+        years = {parse_path(m["filepath"])["year"] for m in members}
+        years.discard(None)
+        if len(years) > 1:
+            continue  # different release years => different films (upstream mis-match)
+        durs = [m["duration_ms"] for m in members]
+        if (max(durs) - min(durs)) / 1000.0 >= deviation_seconds:
+            continue  # different runtimes => distinct works or a different version
         keeper = select_keeper(members, priority)
         for m in members:
             m["is_keeper"] = m["filepath"] == keeper["filepath"]

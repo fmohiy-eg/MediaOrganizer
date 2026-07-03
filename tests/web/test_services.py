@@ -223,6 +223,64 @@ def test_quality_variants_excludes_episodes_unprobed_and_same_folder(tmp_path):
     assert quality_variant_conflicts(conn)["group_count"] == 0
 
 
+def test_quality_variants_never_groups_multipart_movie(tmp_path):
+    # A multi-part film (CD1/CD2) shares one metadata_id but its parts are ONE movie,
+    # not rival quality copies. Placed in two quality folders with EQUAL runtimes so the
+    # cross-folder and runtime guards would otherwise pass — only the multi-part guard
+    # may exclude it.
+    from src.web.services import quality_variant_conflicts
+    conn = _conn(tmp_path)
+    for folder in ("Heat 1080p", "Heat 720p"):
+        upsert_media_file(conn, _rec(f"/movies/{folder}/Heat - CD1.mkv", mid="tmdb:7",
+            size=2_000_000_000, resolution_height=1080, duration_ms=3_000_000))
+        upsert_media_file(conn, _rec(f"/movies/{folder}/Heat - CD2.mkv", mid="tmdb:7",
+            size=2_000_000_000, resolution_height=1080, duration_ms=3_000_000))
+    assert quality_variant_conflicts(conn)["group_count"] == 0
+
+
+def test_quality_variants_never_groups_episodes_that_misparse_as_movies(tmp_path):
+    # REAL-CATALOG GUARD: bare-`Enn` episodes (no `Sxx`) parse as "movie" and every
+    # episode of a show shares ONE series-level metadata_id. Across two season folders
+    # they'd be cross-folder and non-multipart — the _looks_like_tv guard (season-style
+    # folders, episode tokens) must keep them from being offered as one movie's copies.
+    from src.web.services import quality_variant_conflicts
+    conn = _conn(tmp_path)
+    upsert_media_file(conn, _rec("/tv/Great Mazinger (1974)/Season 01/Great Mazinger - E01.mkv",
+        mid="tmdb:55", size=1_000_000_000,
+        resolution_height=1080, duration_ms=1_400_000))     # 23m episode
+    upsert_media_file(conn, _rec("/tv/Great Mazinger (1974)/Season 02/Great Mazinger - E27.mkv",
+        mid="tmdb:55", size=1_100_000_000,
+        resolution_height=1080, duration_ms=1_450_000))     # near-equal runtime (still TV)
+    assert quality_variant_conflicts(conn)["group_count"] == 0
+
+
+def test_quality_variants_excludes_different_release_years(tmp_path):
+    # Real upstream mis-match found in live data: "Solace (2015)" was tagged with
+    # "Quantum of Solace" (2008)'s tmdb id. Same id, cross-folder, near runtime — but
+    # different release years => different films. The year guard must exclude it.
+    from src.web.services import quality_variant_conflicts
+    conn = _conn(tmp_path)
+    upsert_media_file(conn, _rec("/movies/Solace (2015)/Solace (2015).mp4", mid="tmdb:10764",
+        size=1_500_000_000, resolution_height=544, duration_ms=6_060_000))
+    upsert_media_file(conn, _rec("/movies/Quantum of Solace (2008)/Quantum of Solace (2008).mp4",
+        mid="tmdb:10764", size=1_300_000_000,
+        resolution_height=528, duration_ms=6_060_000))     # near-equal runtime
+    assert quality_variant_conflicts(conn)["group_count"] == 0
+
+
+def test_quality_variants_excludes_different_runtime_versions(tmp_path):
+    # Two cross-folder copies of a real movie (no TV tokens, not multi-part) but with
+    # clearly different runtimes = a different version (e.g. extended cut), NOT a
+    # redundant copy. The runtime guard must exclude it.
+    from src.web.services import quality_variant_conflicts
+    conn = _conn(tmp_path)
+    upsert_media_file(conn, _rec("/movies/Blade Runner 1080p/Blade Runner.mkv", mid="tmdb:78",
+        size=8_000_000_000, resolution_height=1080, duration_ms=6_000_000))
+    upsert_media_file(conn, _rec("/movies/Blade Runner Final Cut/Blade Runner.mkv", mid="tmdb:78",
+        size=9_000_000_000, resolution_height=1080, duration_ms=6_700_000))  # +11m
+    assert quality_variant_conflicts(conn)["group_count"] == 0
+
+
 def test_variant_conflicts_explains_keeper_choice(tmp_path):
     conn = _conn(tmp_path)
     # .wmv is a legacy format; .mkv is modern -> the reason should call that out,

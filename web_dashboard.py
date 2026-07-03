@@ -208,7 +208,9 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
             "unmatched": len(unmatched_list(c)),
             "flagged_movies": flagged_audio_movies(c, flag_langs, flag_subdir)["count"],
             "flagged_label": flag_label,
-            "quality_variants": quality_variant_conflicts(c, variant_priority)["group_count"],
+            "quality_variants": quality_variant_conflicts(
+                c, variant_priority,
+                deviation_seconds=duration_deviation_seconds)["group_count"],
         }
 
     @app.get("/api/config")
@@ -224,7 +226,8 @@ def create_app(db_path, quarantine_path, os_api_key="", path_map=None,
     @app.get("/api/quality")
     def quality():
         """Cross-folder quality variants of the same movie (needs probe data)."""
-        return quality_variant_conflicts(conn(), variant_priority)
+        return quality_variant_conflicts(
+            conn(), variant_priority, deviation_seconds=duration_deviation_seconds)
 
     @app.post("/api/variant/probe")
     def variant_probe(body: ProbeBody):
